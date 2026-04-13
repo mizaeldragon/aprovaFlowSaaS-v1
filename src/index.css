@@ -1,0 +1,44 @@
+@import "tailwindcss";
+
+:root {
+  font-family: "Inter", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+}
+
+body {
+  @apply m-0 min-h-screen bg-slate-100 text-slate-900 antialiased;
+  background-image: radial-gradient(circle at top, rgb(241 245 249), rgb(248 250 252) 40%);
+}
+
+a {
+  @apply text-inherit no-underline;
+}
+
+button:not(:disabled) {
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+}
+
+@layer components {
+  .app-card {
+    @apply rounded-2xl border border-slate-200 bg-white shadow-sm;
+  }
+
+  .app-input {
+    @apply w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-sm text-slate-900 outline-none ring-0 transition focus:border-slate-400 focus:ring-2 focus:ring-slate-900/10;
+  }
+
+  .app-label {
+    @apply mb-1.5 block text-sm font-medium text-slate-700;
+  }
+
+  .btn-primary {
+    @apply inline-flex items-center justify-center rounded-xl bg-gradient-to-r from-cyan-700 to-emerald-700 px-4 py-2.5 text-sm font-semibold text-white transition hover:from-cyan-800 hover:to-emerald-800 disabled:cursor-not-allowed disabled:opacity-60;
+  }
+
+  .btn-secondary {
+    @apply inline-flex items-center justify-center rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60;
+  }
+}
