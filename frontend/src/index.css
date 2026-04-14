@@ -1,0 +1,58 @@
+@import "tailwindcss";
+
+:root {
+  font-family: "Inter", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  color-scheme: dark;
+}
+
+body {
+  @apply m-0 min-h-screen bg-slate-950 text-slate-300 antialiased;
+  /* Fundo Escuro Fundamental - Estilo Premium Studio */
+  background-color: #0A0F1C;
+}
+
+/* Utilitário para fundos pontilhados tipo "Cinema Mágico" */
+.bg-dots-pattern {
+  background-image: radial-gradient(rgba(255, 255, 255, 0.1) 1px, transparent 1px);
+  background-size: 20px 20px;
+}
+
+a {
+  @apply text-inherit no-underline hover:text-cyan-400 transition-colors;
+}
+
+button:not(:disabled) {
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+@layer components {
+  /* Cartões estilo Glass/Dark luxuosos */
+  .app-card {
+    @apply rounded-2xl border border-slate-800 bg-[#111827] shadow-xl overflow-hidden;
+  }
+
+  /* Inputs Noturnos */
+  .app-input {
+    @apply w-full rounded-xl border border-slate-800 bg-slate-900/50 px-3.5 py-2.5 text-sm text-white placeholder-slate-500 outline-none ring-0 transition focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500;
+  }
+
+  .app-label {
+    @apply mb-1.5 block text-xs font-bold uppercase tracking-wider text-slate-400;
+  }
+
+  /* Botão Ciano Vibrante (Como na referência) */
+  .btn-primary {
+    @apply inline-flex items-center justify-center rounded-xl bg-gradient-to-r from-cyan-400 to-cyan-500 px-5 py-3 text-sm font-extrabold text-slate-950 transition hover:from-cyan-300 hover:to-cyan-400 hover:shadow-[0_0_15px_rgba(34,211,238,0.5)] disabled:cursor-not-allowed disabled:opacity-60;
+  }
+
+  /* Botão Secundário Dark */
+  .btn-secondary {
+    @apply inline-flex items-center justify-center rounded-xl border border-slate-700 bg-slate-800/50 px-5 py-3 text-sm font-semibold text-slate-300 transition hover:bg-slate-800 hover:text-white hover:border-slate-600 disabled:cursor-not-allowed disabled:opacity-60;
+  }
+}
+

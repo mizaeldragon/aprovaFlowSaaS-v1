@@ -1,0 +1,54 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Tenant {
+  id         String   @id @default(uuid())
+  name       String
+  logoUrl    String?
+  themeColor String?  @default("#0f172a")
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  users     User[]
+  posts     Post[]
+}
+
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  name         String?
+  passwordHash String
+  tenantId     String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id])
+  createdAt DateTime @default(now())
+}
+
+model Post {
+  id          String   @id @default(uuid())
+  title       String
+  channel     String
+  caption     String?
+  imageUrl    String
+  status      String   @default("PENDING") // PENDING, APPROVED, ADJUSTMENT
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id])
+  clientName  String? // Nome do cliente solto para aprovação
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  comments    Comment[]
+}
+
+model Comment {
+  id        String   @id @default(uuid())
+  text      String
+  author    String   // "Client", "Agency" ou nome exato
+  postId    String
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+}
