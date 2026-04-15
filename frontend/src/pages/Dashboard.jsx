@@ -1,12 +1,13 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { io } from 'socket.io-client'
 import { 
   Menu, Pencil, Trash2, 
   Clock, CheckCircle, RotateCw, Activity, 
-  FileText, Link2, ExternalLink, Plus, Sparkles, AlertCircle
+  FileText, Link2, ExternalLink, Plus, Sparkles, AlertCircle, Upload, ListChecks, ShieldCheck
 } from 'lucide-react'
 import StatusBadge from '../components/ui/StatusBadge'
-import { deletePostById, listPosts, updatePostById, createPost } from '../services/reviewService'
+import { deletePostById, listPosts, updatePostById, createPost, publishPostById, listSlaAlerts, updateTaskById } from '../services/reviewService'
 import { uploadImageToCreativeAssets } from '../services/storageService'
 
 const ALLOWED_CHANNELS = ['Instagram', 'LinkedIn', 'Facebook']
@@ -16,8 +17,10 @@ function Dashboard() {
   const [selectedPostId, setSelectedPostId] = useState(null)
   
   const [loadingPosts, setLoadingPosts] = useState(true)
+  const [slaAlerts, setSlaAlerts] = useState([])
   const [copyFeedback, setCopyFeedback] = useState('')
   const [error, setError] = useState('')
+  const [chartRange, setChartRange] = useState('week')
   
   // Menus and Modals
   const [openMenuPostId, setOpenMenuPostId] = useState(null)
@@ -36,37 +39,174 @@ function Dashboard() {
   
   const [editImageFile, setEditImageFile] = useState(null)
   const [editForm, setEditForm] = useState({
-    title: '', channel: 'Instagram', caption: '', status: 'pending', public_slug: '', image_url: '',
+    title: '', clientName: '', channel: 'Instagram', caption: '', status: 'pending', public_slug: '', image_url: '',
   })
 
   const actionsMenuRef = useRef(null)
   const menuButtonRefs = useRef(new Map())
-
+  const complianceSectionRef = useRef(null)
+  const selectedPost = posts.find((p) => p.id === selectedPostId) || null
   // --- Data Fetching ---
-  useEffect(() => {
-    let active = true
-    async function loadPosts() {
-      setLoadingPosts(true)
+  const loadDashboardData = useCallback(async ({ withLoader = false } = {}) => {
+    if (withLoader) setLoadingPosts(true)
+    try {
+      const data = await listPosts()
+      setPosts(data)
+      setSelectedPostId((currentId) => (data.some((item) => item.id === currentId) ? currentId : (data[0]?.id ?? null)))
       try {
-        const data = await listPosts()
-        if (active) {
-          setPosts(data)
-          setSelectedPostId(data[0]?.id ?? null)
-        }
-      } catch (err) {
-        if (active) setError('Não foi possível carregar os projetos.')
-      } finally {
-        if (active) setLoadingPosts(false)
+        const alerts = await listSlaAlerts()
+        setSlaAlerts(alerts?.alerts || [])
+      } catch {
+        setSlaAlerts([])
       }
+    } catch {
+      setError('Nao foi possivel carregar os projetos.')
+    } finally {
+      if (withLoader) setLoadingPosts(false)
     }
-    loadPosts()
-    return () => { active = false }
   }, [])
 
+  useEffect(() => {
+    loadDashboardData({ withLoader: true })
+    const timer = window.setInterval(() => loadDashboardData(), 15000)
+    return () => window.clearInterval(timer)
+  }, [loadDashboardData])
+
+  useEffect(() => {
+    const rawApi = import.meta.env.VITE_API_URL || 'http://localhost:3000/api'
+    const socketUrl = rawApi.replace(/\/api\/?$/, '')
+    const token = localStorage.getItem('aprovaflow-token')
+    const tenantId = localStorage.getItem('aprovaflow-tenant')
+    const socket = io(socketUrl, {
+      transports: ['websocket'],
+      auth: { token },
+      query: { tenantId },
+    })
+
+    socket.on('dashboard:update', () => {
+      loadDashboardData()
+    })
+
+    return () => {
+      socket.disconnect()
+    }
+  }, [loadDashboardData])
+
   // --- Analytics Derivations ---
-  const pendingCount = posts.filter(p => p.status === 'pending').length
-  const approvedCount = posts.filter(p => p.status === 'approved').length
-  const adjustmentsCount = posts.filter(p => p.status === 'changes_requested').length
+  const pendingCount = posts.filter((p) => p.status === 'pending').length
+  const approvedCount = posts.filter((p) => p.status === 'approved').length
+  const adjustmentsCount = posts.filter((p) => p.status === 'changes_requested').length
+
+  const allEvents = useMemo(
+    () =>
+      posts.flatMap((post) =>
+        (post.approval_events || []).map((event) => ({
+          ...event,
+          postId: post.id,
+        }))
+      ),
+    [posts]
+  )
+
+  const approvedTodayCount = allEvents.filter((event) => {
+    const action = String(event.action || '').toUpperCase()
+    if (action !== 'APPROVED') return false
+    const eventDate = new Date(event.createdAt)
+    const now = new Date()
+    return (
+      eventDate.getFullYear() === now.getFullYear() &&
+      eventDate.getMonth() === now.getMonth() &&
+      eventDate.getDate() === now.getDate()
+    )
+  }).length
+
+  const approvalDurationsHours = posts
+    .map((post) => {
+      const approvedEvent = (post.approval_events || []).find(
+        (event) => String(event.action || '').toUpperCase() === 'APPROVED'
+      )
+      if (!approvedEvent || !post.created_at) return null
+      const createdAtMs = new Date(post.created_at).getTime()
+      const approvedAtMs = new Date(approvedEvent.createdAt).getTime()
+      if (!Number.isFinite(createdAtMs) || !Number.isFinite(approvedAtMs) || approvedAtMs <= createdAtMs) return null
+      return (approvedAtMs - createdAtMs) / (1000 * 60 * 60)
+    })
+    .filter((value) => typeof value === 'number')
+
+  const averageApprovalHours = approvalDurationsHours.length
+    ? approvalDurationsHours.reduce((sum, value) => sum + value, 0) / approvalDurationsHours.length
+    : null
+
+  const chartData = useMemo(() => {
+    const labelsWeek = ['SEG', 'TER', 'QUA', 'QUI', 'SEX', 'SAB', 'DOM']
+    const productivityActions = new Set(['CREATED', 'APPROVED', 'ADJUSTMENT', 'PENDING', 'PUBLISHED'])
+
+    const countEventsInWindow = (start, end) =>
+      allEvents.filter((event) => {
+        const action = String(event.action || '').toUpperCase()
+        if (!productivityActions.has(action)) return false
+        const created = new Date(event.createdAt).getTime()
+        return created >= start.getTime() && created <= end.getTime()
+      }).length
+
+    const now = new Date()
+
+    if (chartRange === 'month') {
+      const labels = ['S1', 'S2', 'S3', 'S4']
+      const day = now.getDay()
+      const mondayOffset = (day + 6) % 7
+      const currentMonday = new Date(now)
+      currentMonday.setDate(now.getDate() - mondayOffset)
+      currentMonday.setHours(0, 0, 0, 0)
+
+      const values = Array.from({ length: 4 }, (_, index) => {
+        const weekStart = new Date(currentMonday)
+        weekStart.setDate(currentMonday.getDate() - (3 - index) * 7)
+        const weekEnd = new Date(weekStart)
+        weekEnd.setDate(weekStart.getDate() + 6)
+        weekEnd.setHours(23, 59, 59, 999)
+        return countEventsInWindow(weekStart, weekEnd)
+      })
+
+      return {
+        labels,
+        values,
+        maxValue: Math.max(...values, 1),
+        title: 'Produtividade Mensal',
+        subtitle: 'Eventos de fluxo das ultimas 4 semanas',
+      }
+    }
+
+    const day = now.getDay()
+    const mondayOffset = (day + 6) % 7
+    const monday = new Date(now)
+    monday.setDate(now.getDate() - mondayOffset)
+    monday.setHours(0, 0, 0, 0)
+
+    const values = Array.from({ length: 7 }, (_, index) => {
+      const start = new Date(monday)
+      start.setDate(monday.getDate() + index)
+      start.setHours(0, 0, 0, 0)
+      const end = new Date(start)
+      end.setHours(23, 59, 59, 999)
+      return countEventsInWindow(start, end)
+    })
+
+    return {
+      labels: labelsWeek,
+      values,
+      maxValue: Math.max(...values, 1),
+      title: 'Produtividade Semanal',
+      subtitle: 'Eventos de fluxo na semana atual (seg-dom)',
+    }
+  }, [allEvents, chartRange])
+
+  const orbitPost = useMemo(() => {
+    if (slaAlerts.length > 0) {
+      return [...slaAlerts].sort((a, b) => new Date(a.dueAt).getTime() - new Date(b.dueAt).getTime())[0]
+    }
+    return posts[0] || null
+  }, [posts, slaAlerts])
 
   // --- Handlers ---
   useEffect(() => {
@@ -115,7 +255,7 @@ function Dashboard() {
     setEditingPost(post)
     setEditImageFile(null)
     setEditForm({
-      title: post.title || '', channel: post.channel || 'Instagram', caption: post.caption || '',
+      title: post.title || '', clientName: post.clientName || '', channel: post.channel || 'Instagram', caption: post.caption || '',
       status: post.status || 'pending', public_slug: post.public_slug || '', image_url: post.image_url || '',
     })
     setIsEditModalOpen(true)
@@ -139,11 +279,15 @@ function Dashboard() {
   // Create Handlers (Simulated or Real if createPost exists)
   const openCreateModal = () => {
     setEditImageFile(null)
-    setEditForm({ title: '', channel: 'Instagram', caption: '', status: 'pending', public_slug: '', image_url: '' })
+    setEditForm({ title: '', clientName: '', channel: 'Instagram', caption: '', status: 'pending', public_slug: '', image_url: '' })
     setIsCreateModalOpen(true)
   }
 
   const handleCreateSave = async () => {
+    if (!editForm.clientName.trim()) {
+      setError('Informe o nome do cliente para criar o projeto.')
+      return
+    }
     setIsCreatingPost(true)
     try {
       let imageUrl = null
@@ -153,6 +297,7 @@ function Dashboard() {
       
       const newPostData = {
         title: editForm.title || 'Novo Projeto',
+        clientName: editForm.clientName.trim(),
         channel: editForm.channel,
         caption: editForm.caption,
         status: editForm.status,
@@ -189,6 +334,53 @@ function Dashboard() {
     }
   }
 
+  const handlePublish = async (post) => {
+    try {
+      const updated = await publishPostById(post.id)
+      setPosts((prev) => prev.map((p) => (p.id === updated.id ? updated : p)))
+      setCopyFeedback('Post publicado com seguranca.')
+      setTimeout(() => setCopyFeedback(''), 2500)
+    } catch (e) {
+      setError(e?.response?.data?.error || 'Nao foi possivel publicar o post.')
+    }
+  }
+
+  const handleToggleTask = async (taskId, done) => {
+    try {
+      const updatedTask = await updateTaskById(taskId, done)
+      setPosts((prev) =>
+        prev.map((post) => ({
+          ...post,
+          tasks: (post.tasks || []).map((task) => (task.id === updatedTask.id ? { ...task, ...updatedTask } : task)),
+        }))
+      )
+    } catch {
+      setError('Nao foi possivel atualizar checklist.')
+    }
+  }
+
+  const formatEventAction = (action) => {
+    const key = String(action || '').toUpperCase()
+    if (key === 'CREATED') return 'Criado'
+    if (key === 'APPROVED') return 'Aprovado'
+    if (key === 'ADJUSTMENT') return 'Solicitou ajuste'
+    if (key === 'COMMENT') return 'Comentou'
+    if (key === 'PUBLISHED') return 'Publicado'
+    if (key === 'SLA_REMINDER_TRIGGERED') return 'Lembrete SLA disparado'
+    return key
+  }
+
+  const handleOrbitDetails = () => {
+    if (!orbitPost?.id) return
+    setSelectedPostId(orbitPost.id)
+    const rowElement = document.getElementById(`post-row-${orbitPost.id}`)
+    if (rowElement) {
+      rowElement.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      return
+    }
+    complianceSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
+
   return (
     <div className="h-[calc(100vh-1rem)] flex flex-col bg-[#050B14] p-4 xl:px-8 xl:py-6 font-sans text-slate-300 relative overflow-hidden">
       
@@ -203,6 +395,11 @@ function Dashboard() {
           Sincronizado
         </div>
       </header>
+      {slaAlerts.length > 0 && (
+        <div className="mb-4 rounded-xl border border-amber-400/30 bg-amber-500/10 px-4 py-3 text-xs font-bold text-amber-300">
+          {slaAlerts.length} item(ns) com SLA estourado aguardando aprovacao.
+        </div>
+      )}
 
       {/* TOP STATS */}
       <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-5 shrink-0">
@@ -211,7 +408,7 @@ function Dashboard() {
             <div className="w-8 h-8 rounded-xl bg-cyan-500/10 text-cyan-400 flex items-center justify-center ring-1 ring-cyan-500/20">
               <Clock size={16} />
             </div>
-            <span className="bg-[#1E293B] text-slate-300 text-[10px] font-bold px-2 py-1 rounded bg-opacity-80">+12%</span>
+            <span className="bg-[#1E293B] text-slate-300 text-[10px] font-bold px-2 py-1 rounded bg-opacity-80">Total</span>
           </div>
           <div>
             <p className="text-slate-400 text-[10px] xl:text-xs font-bold uppercase tracking-widest mb-0.5">Aprovações Pendentes</p>
@@ -224,10 +421,10 @@ function Dashboard() {
             <div className="w-8 h-8 rounded-xl bg-indigo-500/10 text-indigo-400 flex items-center justify-center ring-1 ring-indigo-500/20">
               <CheckCircle size={16} />
             </div>
-            <span className="bg-[#1E293B] text-slate-300 text-[10px] font-bold px-2 py-1 rounded bg-opacity-80">+4</span>
+            <span className="bg-[#1E293B] text-slate-300 text-[10px] font-bold px-2 py-1 rounded bg-opacity-80">{`Hoje ${approvedTodayCount}`}</span>
           </div>
           <div>
-            <p className="text-slate-400 text-[10px] xl:text-xs font-bold uppercase tracking-widest mb-0.5">Aprovados Hoje</p>
+            <p className="text-slate-400 text-[10px] xl:text-xs font-bold uppercase tracking-widest mb-0.5">Aprovados</p>
             <p className="text-2xl xl:text-3xl font-extrabold text-white">{approvedCount}</p>
           </div>
         </div>
@@ -237,7 +434,7 @@ function Dashboard() {
             <div className="w-8 h-8 rounded-xl bg-rose-500/10 text-rose-400 flex items-center justify-center ring-1 ring-rose-500/20">
               <AlertCircle size={16} />
             </div>
-            <span className="bg-rose-500/20 text-rose-400 text-[10px] font-bold px-2 py-1 rounded bg-opacity-80">-2</span>
+            <span className="bg-rose-500/20 text-rose-400 text-[10px] font-bold px-2 py-1 rounded bg-opacity-80">{adjustmentsCount}</span>
           </div>
           <div>
             <p className="text-slate-400 text-[10px] xl:text-xs font-bold uppercase tracking-widest mb-0.5">Ajustes Solicitados</p>
@@ -250,56 +447,63 @@ function Dashboard() {
             <div className="w-8 h-8 rounded-xl bg-amber-500/10 text-amber-400 flex items-center justify-center ring-1 ring-amber-500/20">
               <Activity size={16} />
             </div>
-            <span className="bg-[#1E293B] text-slate-300 text-[10px] font-bold px-2 py-1 rounded bg-opacity-80">Rápido</span>
+            <span className="bg-[#1E293B] text-slate-300 text-[10px] font-bold px-2 py-1 rounded bg-opacity-80">Dinamico</span>
           </div>
           <div>
-            <p className="text-slate-400 text-[10px] xl:text-xs font-bold uppercase tracking-widest mb-0.5">Tempo Médio</p>
-            <p className="text-2xl xl:text-3xl font-extrabold text-white">4.2h</p>
+            <p className="text-slate-400 text-[10px] xl:text-xs font-bold uppercase tracking-widest mb-0.5">Tempo Medio</p>
+            <p className="text-2xl xl:text-3xl font-extrabold text-white">{averageApprovalHours !== null ? `${averageApprovalHours.toFixed(1)}h` : '--'}</p>
           </div>
         </div>
       </section>
 
       {/* MIDDLE SECTION (Charts) */}
-      <section className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-5 shrink-0 h-[220px] xl:h-[260px]">
+      <section className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-5 shrink-0 h-[260px] xl:h-[300px]">
         
         {/* Productivity Chart */}
         <div className="lg:col-span-2 bg-[#0a101d] rounded-3xl p-5 xl:p-6 border border-slate-800/60 shadow-2xl relative overflow-hidden flex flex-col justify-between">
           <div className="flex justify-between items-start z-10 relative shrink-0">
              <div>
-                <h3 className="text-lg xl:text-xl font-bold text-white mb-0.5">Produtividade Semanal</h3>
-                <p className="text-xs font-medium text-slate-400">Velocidade de projetos ativos nos últimos 7 dias</p>
+                <h3 className="text-lg xl:text-xl font-bold text-white mb-0.5">{chartData.title}</h3>
+                <p className="text-xs font-medium text-slate-400">{chartData.subtitle}</p>
              </div>
              <div className="flex gap-4 text-xs font-bold">
-               <button className="text-cyan-400 pb-1 border-b-2 border-cyan-400">Semana</button>
-               <button className="text-slate-500 hover:text-slate-300 pb-1 border-b-2 border-transparent transition-colors">Mês</button>
+               <button
+                 type="button"
+                 onClick={() => setChartRange('week')}
+                 className={`${chartRange === 'week' ? 'text-cyan-400 border-cyan-400' : 'text-slate-500 border-transparent hover:text-slate-300'} pb-1 border-b-2 transition-colors`}
+               >
+                 Semana
+               </button>
+               <button
+                 type="button"
+                 onClick={() => setChartRange('month')}
+                 className={`${chartRange === 'month' ? 'text-cyan-400 border-cyan-400' : 'text-slate-500 border-transparent hover:text-slate-300'} pb-1 border-b-2 transition-colors`}
+               >
+                 Mes
+               </button>
              </div>
           </div>
 
-          <div className="absolute inset-0 top-16 w-full h-full flex items-end">
-             {/* Mocked D3 Style SVG Curve */}
-             <svg viewBox="0 0 800 300" className="w-full h-full preserve-3d" preserveAspectRatio="none">
-               <defs>
-                 <linearGradient id="gradientCurve" x1="0" x2="0" y1="0" y2="1">
-                   <stop offset="0%" stopColor="rgba(34,211,238,0.4)" />
-                   <stop offset="100%" stopColor="rgba(34,211,238,0.0)" />
-                 </linearGradient>
-                 <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
-                    <feGaussianBlur stdDeviation="4" result="blur" />
-                    <feComposite in="SourceGraphic" in2="blur" operator="over" />
-                 </filter>
-               </defs>
-               <path d="M0,200 C100,160 200,240 300,100 C400,-40 500,280 600,220 C700,160 760,40 800,20 L800,300 L0,300 Z" fill="url(#gradientCurve)" />
-               <path d="M0,200 C100,160 200,240 300,100 C400,-40 500,280 600,220 C700,160 760,40 800,20" fill="none" stroke="#22d3ee" strokeWidth="4" filter="url(#glow)" />
-               
-               <circle cx="200" cy="215" r="5" fill="#0B1221" stroke="#22d3ee" strokeWidth="3" />
-               <circle cx="330" cy="50" r="5" fill="#0B1221" stroke="#22d3ee" strokeWidth="3" />
-               <circle cx="490" cy="205" r="5" fill="#0B1221" stroke="#22d3ee" strokeWidth="3" />
-             </svg>
-          </div>
-
-          {/* X Axis Mock */}
-          <div className="flex justify-between items-center text-[10px] font-bold text-slate-500 uppercase tracking-widest z-10 relative">
-             <span>SEG</span><span>TER</span><span>QUA</span><span>QUI</span><span>SEX</span><span>SAB</span><span>DOM</span>
+          <div className={`mt-5 flex-1 grid ${chartRange === 'month' ? 'grid-cols-4 gap-4' : 'grid-cols-7 gap-3'} items-end`}>
+            {chartData.values.map((value, index) => {
+              const ratio = chartData.maxValue > 0 ? value / chartData.maxValue : 0
+              const minHeight = value > 0 ? 8 : 0
+              const height = `${Math.max(minHeight, ratio * 130)}px`
+              return (
+                <div key={chartData.labels[index]} className="flex flex-col items-center justify-end h-full">
+                  <div className="text-[10px] text-slate-500 mb-2">{value}</div>
+                  <div className="w-full max-w-[64px] rounded-t-lg bg-[#111827] border border-slate-800 overflow-hidden">
+                    <div
+                      className="w-full rounded-t-lg bg-gradient-to-t from-cyan-600 to-cyan-300 shadow-[0_0_12px_rgba(34,211,238,0.35)]"
+                      style={{ height }}
+                    />
+                  </div>
+                  <span className="mt-2 text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+                    {chartData.labels[index]}
+                  </span>
+                </div>
+              )
+            })}
           </div>
         </div>
 
@@ -321,9 +525,11 @@ function Dashboard() {
            </div>
 
            <div className="text-center w-full">
-              <p className="text-[11px] xl:text-xs font-extrabold text-white mb-0.5">Fluxo Principal #{posts[0]?.id || '---'}</p>
-              <p className="text-[10px] text-slate-400 mb-3 xl:mb-4 italic line-clamp-1">Aguardando iteração no projeto</p>
-              <button className="w-full bg-[#111827] hover:bg-[#1E293B] text-slate-300 font-bold py-2 xl:py-2.5 rounded-xl text-xs transition-colors border border-slate-800">
+              <p className="text-[11px] xl:text-xs font-extrabold text-white mb-0.5 line-clamp-1">{orbitPost ? `Fluxo Principal #${orbitPost.id}` : 'Sem fluxo ativo'}</p>
+              <p className="text-[10px] text-slate-400 mb-3 xl:mb-4 italic line-clamp-1">
+                {orbitPost?.title ? orbitPost.title : 'Aguardando iteracao no projeto'}
+              </p>
+              <button onClick={handleOrbitDetails} className="w-full bg-[#111827] hover:bg-[#1E293B] text-slate-300 font-bold py-2 xl:py-2.5 rounded-xl text-xs transition-colors border border-slate-800">
                  Ver Detalhes
               </button>
            </div>
@@ -354,7 +560,12 @@ function Dashboard() {
                     <tr><td colSpan="4" className="py-6 text-center text-sm text-slate-500">Nenhum projeto encontrado.</td></tr>
                   ) : (
                     posts.map(post => (
-                    <tr key={post.id} className="hover:bg-[#111827]/50 transition-colors group">
+                    <tr
+                      id={`post-row-${post.id}`}
+                      key={post.id}
+                      onClick={() => setSelectedPostId(post.id)}
+                      className={`hover:bg-[#111827]/50 transition-colors group cursor-pointer ${selectedPostId === post.id ? 'bg-[#111827]/60' : ''}`}
+                    >
                        <td className="py-3 px-2">
                           <div className="flex items-center gap-3">
                              {post.image_url ? (
@@ -390,6 +601,79 @@ function Dashboard() {
          </div>
       </section>
 
+      {/* COMPLIANCE + CHECKLIST */}
+      <section ref={complianceSectionRef} className="mt-5 grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div className="bg-[#0a101d] rounded-3xl p-5 xl:p-6 border border-slate-800/60 shadow-2xl">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-9 h-9 rounded-xl bg-cyan-500/10 flex items-center justify-center text-cyan-300">
+              <ShieldCheck size={18} />
+            </div>
+            <div>
+              <h3 className="text-base xl:text-lg font-bold text-white">Trilha Juridica</h3>
+              <p className="text-xs text-slate-400">Timeline de eventos com data, autor e versao.</p>
+            </div>
+          </div>
+
+          {!selectedPost ? (
+            <p className="text-sm text-slate-500">Selecione um post na tabela para ver a trilha.</p>
+          ) : (selectedPost.approval_events || []).length === 0 ? (
+            <p className="text-sm text-slate-500">Sem eventos registrados neste post.</p>
+          ) : (
+            <div className="space-y-3 max-h-72 overflow-y-auto pr-2 custom-scrollbar">
+              {(selectedPost.approval_events || []).map((event) => (
+                <div key={event.id} className="rounded-xl border border-slate-800 bg-[#0B1221] p-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-sm font-bold text-white">{formatEventAction(event.action)}</p>
+                    <p className="text-[10px] text-slate-500 font-bold uppercase">v{event.postVersion || '-'}</p>
+                  </div>
+                  <p className="text-xs text-slate-400 mt-1">
+                    {event.actorName || 'Sistema'} - {new Date(event.createdAt).toLocaleString('pt-BR')}
+                  </p>
+                  {event.versionHash ? (
+                    <p className="text-[10px] text-slate-500 mt-1 break-all">Hash: {event.versionHash}</p>
+                  ) : null}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="bg-[#0a101d] rounded-3xl p-5 xl:p-6 border border-slate-800/60 shadow-2xl">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-9 h-9 rounded-xl bg-emerald-500/10 flex items-center justify-center text-emerald-300">
+              <ListChecks size={18} />
+            </div>
+            <div>
+              <h3 className="text-base xl:text-lg font-bold text-white">Checklist Automatico</h3>
+              <p className="text-xs text-slate-400">Tarefas extraidas dos comentarios do cliente.</p>
+            </div>
+          </div>
+
+          {!selectedPost ? (
+            <p className="text-sm text-slate-500">Selecione um post na tabela para ver o checklist.</p>
+          ) : (selectedPost.tasks || []).length === 0 ? (
+            <p className="text-sm text-slate-500">Ainda nao houve comentario com itens de ajuste.</p>
+          ) : (
+            <div className="space-y-2 max-h-72 overflow-y-auto pr-2 custom-scrollbar">
+              {(selectedPost.tasks || []).map((task) => (
+                <label key={task.id} className="flex items-start gap-3 rounded-xl border border-slate-800 bg-[#0B1221] p-3">
+                  <input
+                    type="checkbox"
+                    checked={Boolean(task.done)}
+                    onChange={(e) => handleToggleTask(task.id, e.target.checked)}
+                    className="mt-1 h-4 w-4 rounded border-slate-600 bg-slate-900 text-cyan-500 focus:ring-cyan-500"
+                  />
+                  <div className="min-w-0">
+                    <p className={`text-sm font-semibold ${task.done ? 'text-slate-500 line-through' : 'text-slate-200'}`}>{task.title}</p>
+                    <p className="text-[10px] text-slate-500 mt-1">Criado em {new Date(task.createdAt).toLocaleString('pt-BR')}</p>
+                  </div>
+                </label>
+              ))}
+            </div>
+          )}
+        </div>
+      </section>
+
       {/* ACTION DROPDOWN */}
       {openMenuPostId && (() => {
         const p = posts.find(x => x.id === openMenuPostId)
@@ -404,6 +688,9 @@ function Dashboard() {
             </Link>
             <button onClick={() => { openEditModal(p); setOpenMenuPostId(null) }} className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-[13px] font-medium text-slate-300 hover:bg-[#1E293B] hover:text-white transition-colors">
               <Pencil size={16} /> Editar Obra
+            </button>
+            <button onClick={() => { handlePublish(p); setOpenMenuPostId(null) }} className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-[13px] font-medium text-cyan-300 hover:bg-cyan-500/10 hover:text-cyan-200 transition-colors">
+              <Upload size={16} /> Publicar (somente aprovado)
             </button>
             <button onClick={() => { setDeletingPost(p); setIsDeleteModalOpen(true); setOpenMenuPostId(null) }} className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-[13px] font-medium text-rose-500 hover:bg-rose-500/10 hover:text-rose-400 transition-colors">
               <Trash2 size={16} /> Destruir Projeto
@@ -427,6 +714,11 @@ function Dashboard() {
               <div className="sm:col-span-2">
                 <label className="text-slate-400 font-bold tracking-widest text-[10px] block mb-2">TÍTULO DA OBRA</label>
                 <input name="title" value={editForm.title} onChange={e => setEditForm({...editForm, title: e.target.value})} className="w-full bg-[#050B14] border border-slate-800 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-1 focus:ring-cyan-500" placeholder="Ex: Campanha Black Friday..." />
+              </div>
+
+              <div className="sm:col-span-2">
+                <label className="text-slate-400 font-bold tracking-widest text-[10px] block mb-2">NOME DO CLIENTE</label>
+                <input name="clientName" value={editForm.clientName} onChange={e => setEditForm({...editForm, clientName: e.target.value})} className="w-full bg-[#050B14] border border-slate-800 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-1 focus:ring-cyan-500" placeholder="Ex: CobrancaPRO" />
               </div>
               
               <div>

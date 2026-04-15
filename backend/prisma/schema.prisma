@@ -7,15 +7,17 @@ datasource db {
 }
 
 model Tenant {
-  id         String   @id @default(uuid())
-  name       String
-  logoUrl    String?
-  themeColor String?  @default("#0f172a")
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  id           String   @id @default(uuid())
+  name         String
+  logoUrl      String?
+  themeColor   String?  @default("#0f172a")
+  customDomain String?
+  isPro        Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
-  users     User[]
-  posts     Post[]
+  users User[]
+  posts Post[]
 }
 
 model User {
@@ -24,31 +26,65 @@ model User {
   name         String?
   passwordHash String
   tenantId     String
-  tenant    Tenant   @relation(fields: [tenantId], references: [id])
-  createdAt DateTime @default(now())
+  tenant       Tenant   @relation(fields: [tenantId], references: [id])
+  createdAt    DateTime @default(now())
 }
 
 model Post {
-  id          String   @id @default(uuid())
-  title       String
-  channel     String
-  caption     String?
-  imageUrl    String
-  status      String   @default("PENDING") // PENDING, APPROVED, ADJUSTMENT
-  tenantId    String
-  tenant      Tenant   @relation(fields: [tenantId], references: [id])
-  clientName  String? // Nome do cliente solto para aprovação
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  
-  comments    Comment[]
+  id                 String   @id @default(uuid())
+  title              String
+  channel            String
+  caption            String?
+  imageUrl           String
+  status             String   @default("PENDING") // PENDING, APPROVED, ADJUSTMENT
+  version            Int      @default(1)
+  currentVersionHash String?
+  slaHours           Int      @default(48)
+  dueAt              DateTime?
+  lastReminderAt     DateTime?
+  publishedAt        DateTime?
+  tenantId           String
+  tenant             Tenant   @relation(fields: [tenantId], references: [id])
+  clientName         String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  comments       Comment[]
+  tasks          TaskItem[]
+  approvalEvents ApprovalEvent[]
 }
 
 model Comment {
-  id        String   @id @default(uuid())
-  text      String
-  author    String   // "Client", "Agency" ou nome exato
-  postId    String
-  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
-  createdAt DateTime @default(now())
+  id         String   @id @default(uuid())
+  text       String
+  author     String
+  actionType String?
+  postId     String
+  post       Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+}
+
+model TaskItem {
+  id              String   @id @default(uuid())
+  postId          String
+  post            Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  title           String
+  done            Boolean  @default(false)
+  sourceCommentId String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model ApprovalEvent {
+  id          String   @id @default(uuid())
+  postId      String
+  post        Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  actorName   String
+  action      String
+  postVersion Int
+  versionHash String?
+  ipAddress   String?
+  userAgent   String?
+  meta        Json?
+  createdAt   DateTime @default(now())
 }

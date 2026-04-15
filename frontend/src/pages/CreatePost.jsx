@@ -5,7 +5,9 @@ import { Sparkles, Image as ImageIcon, Layout, Send, ChevronRight } from 'lucide
 
 const initialFormState = {
   title: '',
+  clientName: '',
   channel: 'Instagram',
+  slaHours: '48',
   caption: '',
   imageFile: null,
 }
@@ -44,7 +46,7 @@ function CreatePost() {
     event.preventDefault()
     setError('')
 
-    if (!form.title.trim() || !form.channel || !form.caption.trim() || !form.imageFile) {
+    if (!form.title.trim() || !form.clientName.trim() || !form.channel || !form.caption.trim() || !form.imageFile) {
       setError('Por favor, preencha todos os campos e selecione uma imagem.')
       return
     }
@@ -53,7 +55,9 @@ function CreatePost() {
     try {
       await createPostWithImage({
         title: form.title.trim(),
+        clientName: form.clientName.trim(),
         channel: form.channel,
+        slaHours: Number(form.slaHours) || 48,
         caption: form.caption.trim(),
         imageFile: form.imageFile,
       })
@@ -121,6 +125,38 @@ function CreatePost() {
                     <ChevronRight size={16} className="rotate-90" />
                   </div>
                 </div>
+              </div>
+
+              <div>
+                <label htmlFor="slaHours" className="block text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-3 px-1">
+                  SLA de Aprovacao (horas)
+                </label>
+                <select
+                  id="slaHours"
+                  name="slaHours"
+                  value={form.slaHours}
+                  onChange={handleChange}
+                  className="w-full bg-[#050B14] border border-slate-800/60 rounded-2xl px-5 py-4 text-white text-sm outline-none focus:ring-1 ring-cyan-500 transition-all appearance-none cursor-pointer font-sans shadow-inner"
+                >
+                  <option value="24">24 horas</option>
+                  <option value="48">48 horas</option>
+                  <option value="72">72 horas</option>
+                </select>
+              </div>
+
+              <div>
+                <label htmlFor="clientName" className="block text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-3 px-1">
+                  Nome do Cliente
+                </label>
+                <input
+                  id="clientName"
+                  name="clientName"
+                  value={form.clientName}
+                  onChange={handleChange}
+                  className="w-full bg-[#050B14] border border-slate-800/60 rounded-2xl px-5 py-4 text-white text-sm outline-none focus:ring-1 ring-cyan-500 transition-all placeholder:text-slate-600 font-sans shadow-inner"
+                  placeholder="Ex: CobrançaPRO"
+                  required
+                />
               </div>
 
               <div>

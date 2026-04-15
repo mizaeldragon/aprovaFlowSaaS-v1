@@ -3,12 +3,36 @@
 :root {
   font-family: "Inter", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
   color-scheme: dark;
+  --brand-color: #22d3ee;
+  --brand-color-light: #67e8f9;
+  --brand-rgb: 34, 211, 238;
+  --brand-on: #06111f;
+  --slate-base: #0c121c;
+  --surface-raised: #111a28;
+  --border-muted: rgba(148, 163, 184, 0.24);
 }
 
 body {
   @apply m-0 min-h-screen bg-slate-950 text-slate-300 antialiased;
-  /* Fundo Escuro Fundamental - Estilo Premium Studio */
-  background-color: #0A0F1C;
+  background-color: #0c121c;
+}
+
+/* Base global para tons "slate" em superfícies */
+[class*="bg-slate-"] {
+  background-color: var(--slate-base) !important;
+}
+
+[class*="border-slate-"] {
+  border-color: var(--border-muted) !important;
+}
+
+[class*="from-slate-"],
+[class*="to-slate-"],
+[class*="via-slate-"] {
+  --tw-gradient-from: var(--slate-base) var(--tw-gradient-from-position) !important;
+  --tw-gradient-via: var(--slate-base) var(--tw-gradient-via-position) !important;
+  --tw-gradient-to: var(--slate-base) var(--tw-gradient-to-position) !important;
+  --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-via), var(--tw-gradient-to) !important;
 }
 
 /* Utilitário para fundos pontilhados tipo "Cinema Mágico" */
@@ -18,7 +42,71 @@ body {
 }
 
 a {
-  @apply text-inherit no-underline hover:text-cyan-400 transition-colors;
+  @apply text-inherit no-underline transition-colors;
+}
+
+a:hover {
+  color: var(--brand-color);
+}
+
+/* White-label global: captura ampla de classes ciano */
+[class*="text-cyan"] {
+  color: var(--brand-color) !important;
+}
+
+[class*="hover:text-cyan"]:hover {
+  color: var(--brand-color) !important;
+}
+
+[class*="bg-cyan-"][class*="/"] {
+  background-color: rgba(var(--brand-rgb), 0.14) !important;
+}
+
+[class*="bg-cyan-"]:not([class*="/"]) {
+  background-color: var(--brand-color) !important;
+}
+
+[class*="hover:bg-cyan-"]:hover {
+  background-color: var(--brand-color) !important;
+}
+
+[class*="border-cyan"] {
+  border-color: rgba(var(--brand-rgb), 0.58) !important;
+}
+
+[class*="ring-cyan"] {
+  --tw-ring-color: rgba(var(--brand-rgb), 0.62) !important;
+}
+
+[class*="focus:ring-cyan"]:focus {
+  --tw-ring-color: rgba(var(--brand-rgb), 0.62) !important;
+}
+
+[class*="focus:border-cyan"]:focus {
+  border-color: rgba(var(--brand-rgb), 0.82) !important;
+}
+
+[class*="from-cyan-"],
+[class*="to-cyan-"],
+[class*="via-cyan-"] {
+  --tw-gradient-from: var(--brand-color-light) var(--tw-gradient-from-position) !important;
+  --tw-gradient-via: var(--brand-color) var(--tw-gradient-via-position) !important;
+  --tw-gradient-to: var(--brand-color) var(--tw-gradient-to-position) !important;
+  --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-via), var(--tw-gradient-to) !important;
+}
+
+[class*="bg-gradient-to-r"][class*="from-cyan-"][class*="to-cyan-"] {
+  background-image: linear-gradient(to right, var(--brand-color-light), var(--brand-color)) !important;
+  color: var(--brand-on) !important;
+}
+
+[class*="bg-gradient-to-t"][class*="from-cyan-"][class*="to-cyan-"] {
+  background-image: linear-gradient(to top, var(--brand-color), var(--brand-color-light)) !important;
+}
+
+[class*="shadow-"][class*="34,211,238"],
+[class*="shadow-"][class*="103,232,249"] {
+  box-shadow: 0 0 18px rgba(var(--brand-rgb), 0.34) !important;
 }
 
 button:not(:disabled) {
@@ -55,4 +143,3 @@ button:disabled {
     @apply inline-flex items-center justify-center rounded-xl border border-slate-700 bg-slate-800/50 px-5 py-3 text-sm font-semibold text-slate-300 transition hover:bg-slate-800 hover:text-white hover:border-slate-600 disabled:cursor-not-allowed disabled:opacity-60;
   }
 }
-

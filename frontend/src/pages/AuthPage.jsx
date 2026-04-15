@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+﻿import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate, useLocation } from 'react-router-dom';
 
@@ -8,8 +8,7 @@ export default function AuthPage() {
   const location = useLocation();
 
   const [tab, setTab] = useState(location.pathname === '/register' ? 'register' : 'login');
-  
-  // Mantém a URL no navegador sincronizada com a aba atual de forma suave
+
   useEffect(() => {
     if (tab === 'login' && location.pathname !== '/login') {
       window.history.replaceState(null, '', '/login');
@@ -41,76 +40,111 @@ export default function AuthPage() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-slate-50 px-4 py-12">
-      <div className="w-full max-w-md rounded-3xl bg-white p-8 shadow-xl shadow-slate-200/50 border border-slate-100">
+    <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[#020817] px-4 py-12">
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(34,211,238,0.20),transparent_42%),radial-gradient(circle_at_80%_0%,rgba(56,189,248,0.16),transparent_48%),linear-gradient(180deg,rgba(2,6,23,0.05),rgba(2,6,23,0.75))]"></div>
+
+      <div className="relative z-10 w-full max-w-md rounded-3xl border border-cyan-400/25 bg-[#04122A]/95 p-8 shadow-[0_20px_60px_rgba(2,12,27,0.75)]">
+        <div className="pointer-events-none absolute -bottom-20 left-1/2 h-40 w-[85%] -translate-x-1/2 rounded-full bg-cyan-400/20 blur-3xl"></div>
         <div className="mb-6 flex flex-col items-center text-center">
-          <img src="/apv-logo.png" alt="AprovaFlow Logo" className="h-11 w-auto mb-6" />
-          <h2 className="text-2xl font-bold tracking-tight text-slate-900">
-            {tab === 'login' ? 'Faça login na sua conta' : 'Crie seu Workspace'}
+          <img src="/apv-logo.png" alt="AprovaFlow Logo" className="mb-6 h-11 w-auto" />
+          <h2 className="text-2xl font-bold tracking-tight text-slate-100">
+            {tab === 'login' ? 'Faca login na sua conta' : 'Crie seu workspace'}
           </h2>
-          <p className="mt-2 text-sm text-slate-500">
-             {tab === 'login' ? 'Bem-vindo de volta ao AprovaFlow.' : 'Transforme a rotina da sua agência.'}
+          <p className="mt-2 text-sm text-slate-400">
+            {tab === 'login' ? 'Bem-vindo de volta ao AprovaFlow.' : 'Transforme a rotina da sua agencia.'}
           </p>
         </div>
 
-        {/* Toggle Elegante */}
-        <div className="mb-8 flex rounded-xl bg-slate-100 p-1">
+        <div className="mb-8 flex rounded-xl border border-slate-700 bg-[#111827] p-1">
           <button
             type="button"
-            onClick={() => { setTab('login'); setError(''); }}
+            onClick={() => {
+              setTab('login');
+              setError('');
+            }}
             className={`flex-1 rounded-lg py-2.5 text-sm font-semibold transition-all ${
-              tab === 'login'
-                ? 'bg-white text-emerald-600 shadow-sm'
-                : 'text-slate-500 hover:text-slate-700'
+              tab === 'login' ? 'bg-[#061630] text-cyan-300 shadow-[0_0_18px_rgba(34,211,238,0.14)]' : 'text-slate-400 hover:text-slate-200'
             }`}
           >
-            Fazer Login
+            Fazer login
           </button>
           <button
             type="button"
-            onClick={() => { setTab('register'); setError(''); }}
+            onClick={() => {
+              setTab('register');
+              setError('');
+            }}
             className={`flex-1 rounded-lg py-2.5 text-sm font-semibold transition-all ${
-              tab === 'register'
-                ? 'bg-white text-emerald-600 shadow-sm'
-                : 'text-slate-500 hover:text-slate-700'
+              tab === 'register' ? 'bg-[#061630] text-cyan-300 shadow-[0_0_18px_rgba(34,211,238,0.14)]' : 'text-slate-400 hover:text-slate-200'
             }`}
           >
-            Criar Conta
+            Criar conta
           </button>
         </div>
-        
+
         <form onSubmit={handleSubmit} className="space-y-4">
           {tab === 'register' && (
             <div className="animate-fade-in">
-              <label className="text-sm font-semibold text-slate-900 mb-1.5 block">Nome da Agência / Equipe</label>
-              <input required className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 transition-all" value={form.agencyName} onChange={e => setForm({...form, agencyName: e.target.value})} placeholder="Ex: Studio Alpha" />
+              <label className="mb-1.5 block text-sm font-semibold text-slate-200">Nome da agencia / equipe</label>
+              <input
+                required
+                className="w-full rounded-xl border border-slate-700 bg-[#050B14] px-4 py-3 text-sm text-slate-200 placeholder:text-slate-500 focus:border-cyan-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/20 transition-all"
+                value={form.agencyName}
+                onChange={(e) => setForm({ ...form, agencyName: e.target.value })}
+                placeholder="Ex: Studio Alpha"
+              />
             </div>
           )}
+
           {tab === 'register' && (
             <div className="animate-fade-in mt-4">
-              <label className="text-sm font-semibold text-slate-900 mb-1.5 block">Seu Nome Completo</label>
-              <input required className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 transition-all" value={form.name} onChange={e => setForm({...form, name: e.target.value})} placeholder="Seu nome" />
+              <label className="mb-1.5 block text-sm font-semibold text-slate-200">Seu nome completo</label>
+              <input
+                required
+                className="w-full rounded-xl border border-slate-700 bg-[#050B14] px-4 py-3 text-sm text-slate-200 placeholder:text-slate-500 focus:border-cyan-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/20 transition-all"
+                value={form.name}
+                onChange={(e) => setForm({ ...form, name: e.target.value })}
+                placeholder="Seu nome"
+              />
             </div>
           )}
-          
+
           <div className="mt-4">
-            <label className="text-sm font-semibold text-slate-900 mb-1.5 block">
-              {tab === 'login' ? 'Email Corporativo' : 'E-mail'}
+            <label className="mb-1.5 block text-sm font-semibold text-slate-200">
+              {tab === 'login' ? 'Email corporativo' : 'E-mail'}
             </label>
-            <input type="email" required className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 transition-all" value={form.email} onChange={e => setForm({...form, email: e.target.value})} placeholder="exemplo@agencia.com" />
-          </div>
-          
-          <div className="mt-4">
-            <label className="text-sm font-semibold text-slate-900 mb-1.5 block">
-              {tab === 'login' ? 'Senha de Acesso' : 'Criar Senha Segura'}
-            </label>
-            <input type="password" required className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 transition-all" value={form.password} onChange={e => setForm({...form, password: e.target.value})} placeholder="••••••••" />
+            <input
+              type="email"
+              required
+              className="w-full rounded-xl border border-slate-700 bg-[#050B14] px-4 py-3 text-sm text-slate-200 placeholder:text-slate-500 focus:border-cyan-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/20 transition-all"
+              value={form.email}
+              onChange={(e) => setForm({ ...form, email: e.target.value })}
+              placeholder="exemplo@agencia.com"
+            />
           </div>
 
-          {error && <p className="text-sm text-rose-600 bg-rose-50 p-3 rounded-lg border border-rose-100">{error}</p>}
-          
-          <button type="submit" disabled={loading} className="mt-6 w-full bg-gradient-to-r from-cyan-600 to-emerald-600 hover:from-cyan-700 hover:to-emerald-700 border-none text-white font-semibold py-3.5 px-4 rounded-xl shadow-lg shadow-cyan-900/20 transition-all flex items-center justify-center">
-            {loading ? 'Processando...' : (tab === 'login' ? 'Entrar no Sistema' : 'Começar Gratuitamente')}
+          <div className="mt-4">
+            <label className="mb-1.5 block text-sm font-semibold text-slate-200">
+              {tab === 'login' ? 'Senha de acesso' : 'Criar senha segura'}
+            </label>
+            <input
+              type="password"
+              required
+              className="w-full rounded-xl border border-slate-700 bg-[#050B14] px-4 py-3 text-sm text-slate-200 placeholder:text-slate-500 focus:border-cyan-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/20 transition-all"
+              value={form.password}
+              onChange={(e) => setForm({ ...form, password: e.target.value })}
+              placeholder="********"
+            />
+          </div>
+
+          {error && <p className="rounded-lg border border-rose-500/30 bg-rose-500/10 p-3 text-sm text-rose-300">{error}</p>}
+
+          <button
+            type="submit"
+            disabled={loading}
+            className="mt-6 flex w-full items-center justify-center rounded-xl border border-cyan-300/30 bg-gradient-to-r from-[#22d3ee] via-[#06b6d4] to-[#0ea5e9] px-4 py-3.5 font-semibold text-[#021220] shadow-[0_0_30px_rgba(34,211,238,0.35)] transition-all hover:from-[#67e8f9] hover:via-[#22d3ee] hover:to-[#38bdf8]"
+          >
+            {loading ? 'Processando...' : tab === 'login' ? 'Entrar no sistema' : 'Comecar gratuitamente'}
           </button>
         </form>
       </div>

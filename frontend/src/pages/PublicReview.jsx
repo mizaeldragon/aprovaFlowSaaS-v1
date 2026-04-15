@@ -131,14 +131,21 @@ function PublicReview() {
   // Identidade White-label (Fallback para o verde da plataforma)
   const isApproved = post.status === 'approved'
   const brandColor = post?.tenant?.themeColor || '#059669'
-  const agencyLogo = post?.tenant?.logoUrl || '/apv-logo.png'
+  const agencyLogo = post?.tenant?.logoUrl || ''
+  const agencyName = post?.tenant?.name || 'Agência'
   const bgSoftColor = hexToRgba(brandColor, 0.05)
 
   return (
     <div className="min-h-screen bg-[#050B14] bg-dots-pattern">
       {/* Logo Premium White-Label (Canto Esquerdo Absoluto) */}
       <div className="absolute top-4 left-4 sm:top-6 sm:left-6 z-20">
-        <img src={agencyLogo} alt="Logo da Agência" className="h-12 sm:h-16 max-w-[200px] sm:max-w-[260px] object-contain drop-shadow-sm transition-all" />
+        {agencyLogo ? (
+          <img src={agencyLogo} alt="Logo da Agência" className="h-12 sm:h-16 max-w-[200px] sm:max-w-[260px] object-contain drop-shadow-sm transition-all" />
+        ) : (
+          <div className="rounded-xl border border-slate-700/80 bg-[#0B1221]/90 px-4 py-2.5 text-sm font-bold text-slate-200 shadow-lg backdrop-blur-sm">
+            {agencyName}
+          </div>
+        )}
       </div>
 
       <main className="mx-auto w-full max-w-3xl px-5 pt-20 sm:pt-24 pb-12">
@@ -167,7 +174,7 @@ function PublicReview() {
               <button
                 onClick={handleUndo}
                 className="flex items-center gap-2 text-sm text-slate-500 hover:text-slate-300 font-semibold transition-colors"
-                disabled={isSubmitting}
+                disabled={isSubmitting || !form.authorName.trim()}
               >
                 <RotateCcw size={16} /> Clicou sem querer? Desfazer aprovação.
               </button>
@@ -217,7 +224,8 @@ function PublicReview() {
                     value={form.authorName}
                     onChange={handleChange}
                     className="app-input"
-                    placeholder="Ex: João Silva"
+                    placeholder="Ex: Joao Silva"
+                    required
                   />
                 </div>
                 <div>
@@ -233,6 +241,12 @@ function PublicReview() {
                 </div>
               </div>
 
+              {!form.authorName.trim() && (
+                <p className="text-xs font-semibold text-amber-400">
+                  Informe seu nome para aprovar, comentar ou pedir ajuste.
+                </p>
+              )}
+
               {error && (
                <p className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm font-semibold text-rose-400 mt-2 animate-fade-in shadow-[0_0_15px_rgba(244,63,94,0.1)]">
                  {error}
@@ -243,7 +257,7 @@ function PublicReview() {
                 <button
                   type="button"
                   onClick={() => handleAction('approved')}
-                  disabled={isSubmitting}
+                  disabled={isSubmitting || !form.authorName.trim()}
                   style={{ backgroundColor: brandColor, boxShadow: `0 0 20px ${hexToRgba(brandColor, 0.4)}` }}
                   className="flex-1 w-full flex items-center justify-center gap-2 rounded-2xl py-4 sm:py-4 px-6 text-lg font-extrabold text-white shadow-xl hover:scale-[1.02] hover:brightness-110 transform transition-all disabled:opacity-60 disabled:scale-100 outline-none"
                 >
@@ -254,7 +268,7 @@ function PublicReview() {
                   <button
                     type="button"
                     onClick={() => handleAction('changes_requested')}
-                    disabled={isSubmitting}
+                    disabled={isSubmitting || !form.authorName.trim()}
                     className="flex-1 rounded-2xl bg-rose-500/10 border border-rose-500/20 text-rose-400 hover:bg-rose-500/20 hover:text-rose-300 hover:shadow-[0_0_15px_rgba(244,63,94,0.15)] py-3 px-4 text-sm font-bold transition-all disabled:opacity-60"
                   >
                     Reprovar Ajuste
@@ -262,7 +276,7 @@ function PublicReview() {
                   <button
                     type="button"
                     onClick={() => handleAction('comment')}
-                    disabled={isSubmitting || !form.comment.trim()}
+                    disabled={isSubmitting || !form.comment.trim() || !form.authorName.trim()}
                     className="flex-1 rounded-2xl bg-slate-800 border border-slate-700 text-slate-300 hover:bg-slate-700 hover:text-white py-3 px-4 text-sm font-bold transition-all disabled:opacity-60"
                   >
                     Só Comentar
@@ -282,3 +296,5 @@ function PublicReview() {
 }
 
 export default PublicReview
+
+

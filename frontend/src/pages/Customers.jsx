@@ -9,7 +9,9 @@ function Customers() {
   useEffect(() => {
     const fetchClients = async () => {
       try {
-        const res = await api.get('/posts')
+        const tenantId = localStorage.getItem('aprovaflow-tenant')
+        const query = tenantId ? `?tenantId=${tenantId}` : ''
+        const res = await api.get(`/posts${query}`)
         // Agregar clientes únicos baseados no clientName
         const posts = res.data
         const clientMap = {}
@@ -22,13 +24,31 @@ function Customers() {
               totalProjects: 0,
               approved: 0,
               lastActivity: post.createdAt,
-              channel: post.channel
+              channel: post.channel,
+              lastReviewer: null,
+              lastReviewAt: null,
             }
           }
           clientMap[name].totalProjects++
           if (post.status === 'APPROVED') clientMap[name].approved++
           if (new Date(post.createdAt) > new Date(clientMap[name].lastActivity)) {
             clientMap[name].lastActivity = post.createdAt
+          }
+
+          const comments = Array.isArray(post.comments) ? post.comments : []
+          if (comments.length > 0) {
+            const latestComment = comments.reduce((latest, current) => {
+              if (!latest) return current
+              return new Date(current.createdAt) > new Date(latest.createdAt) ? current : latest
+            }, null)
+
+            if (
+              latestComment &&
+              (!clientMap[name].lastReviewAt || new Date(latestComment.createdAt) > new Date(clientMap[name].lastReviewAt))
+            ) {
+              clientMap[name].lastReviewer = latestComment.author
+              clientMap[name].lastReviewAt = latestComment.createdAt
+            }
           }
         })
 
@@ -84,6 +104,9 @@ function Customers() {
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> 
                 Ativo em: {new Date(client.lastActivity).toLocaleDateString('pt-BR')}
              </p>
+             <p className="text-xs font-medium text-slate-500 mb-6">
+               Última aprovação/comentário: <span className="font-bold text-slate-300">{client.lastReviewer || 'Ainda sem identificação'}</span>
+             </p>
 
              <div className="grid grid-cols-2 gap-4 mb-6">
                 <div className="bg-[#050B14] p-4 rounded-2xl border border-slate-800/50">
@@ -116,3 +139,4 @@ function Customers() {
 }
 
 export default Customers
+

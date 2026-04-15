@@ -4,254 +4,578 @@ import dotenv from 'dotenv';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import OpenAI from 'openai';
+import crypto from 'crypto';
+import { createServer } from 'http';
+import { Server } from 'socket.io';
 import { prisma } from './prisma';
 
 dotenv.config();
 
 const app = express();
-app.use(cors());
+app.use(cors({ origin: true, credentials: true }));
 app.use(express.json());
-
-// Segredo do JWT que vai estar no .env no servidor real da net
-const JWT_SECRET = process.env.JWT_SECRET || 'aprovaflow_super_secret_dev_key';
-
-// Rota de Teste Simples
-app.get('/', (req, res) => {
-  res.json({ message: 'AprovaFlow SaaS API online! 🚀' });
+const httpServer = createServer(app);
+const io = new Server(httpServer, {
+  cors: {
+    origin: true,
+    credentials: true,
+  },
 });
 
-// ==========================================
-// -------------- AUTHENTICATION ------------
-// ==========================================
+const JWT_SECRET = process.env.JWT_SECRET || 'aprovaflow_super_secret_dev_key';
 
-// Criar Conta da Agência e do Primeiro Dono
-app.post('/api/auth/register', async (req, res) => {
+type JwtPayload = { userId: string; tenantId: string };
+
+function emitTenantDashboardUpdate(tenantId?: string | null, reason = 'updated') {
+  if (!tenantId) return;
+  io.to(`tenant:${tenantId}`).emit('dashboard:update', {
+    tenantId,
+    reason,
+    at: new Date().toISOString(),
+  });
+}
+
+function getTokenPayload(req: express.Request): JwtPayload | null {
   try {
-    const { name, email, password, agencyName } = req.body;
-    
-    if (!email || !password || !agencyName) {
-      return res.status(400).json({ error: 'Preencha todos os campos obrigatórios' });
+    const authHeader = req.headers.authorization;
+    if (!authHeader) return null;
+    const token = authHeader.split(' ')[1];
+    return jwt.verify(token, JWT_SECRET) as JwtPayload;
+  } catch {
+    return null;
+  }
+}
+
+io.use((socket, next) => {
+  try {
+    const authToken = socket.handshake.auth?.token as string | undefined;
+    const bearerToken = typeof authToken === 'string' && authToken.startsWith('Bearer ')
+      ? authToken.slice(7)
+      : authToken;
+    const queryTenantId = String(socket.handshake.query.tenantId || '');
+
+    if (bearerToken) {
+      const payload = jwt.verify(bearerToken, JWT_SECRET) as JwtPayload;
+      socket.data.tenantId = payload.tenantId;
+      return next();
     }
 
-    const existingUser = await prisma.user.findUnique({ where: { email } });
-    if (existingUser) return res.status(400).json({ error: 'Email já cadastrado' });
+    if (queryTenantId) {
+      socket.data.tenantId = queryTenantId;
+      return next();
+    }
 
-    // Criptografa a senha para o Postgres
-    const passwordHash = await bcrypt.hash(password, 10);
-
-    // Cria a agência e o usuário ao mesmo tempo interligados
-    const tenant = await prisma.tenant.create({ data: { name: agencyName } });
-    const user = await prisma.user.create({
-      data: { name, email, passwordHash, tenantId: tenant.id }
-    });
-
-    // Emite o "Cartão de Acesso"
-    const token = jwt.sign({ userId: user.id, tenantId: tenant.id }, JWT_SECRET, { expiresIn: '7d' });
-    
-    res.status(201).json({ user: { id: user.id, name: user.name, email: user.email }, token, tenantId: tenant.id });
-  } catch (error) {
-    res.status(500).json({ error: 'Erro ao registrar usuário' });
+    return next();
+  } catch {
+    return next(new Error('socket auth failed'));
   }
 });
 
-// Fazer Login
+io.on('connection', (socket) => {
+  const tenantId = String(socket.data?.tenantId || socket.handshake.query.tenantId || '');
+  if (tenantId) {
+    socket.join(`tenant:${tenantId}`);
+  }
+});
+
+function getClientIp(req: express.Request): string {
+  const forwarded = req.headers['x-forwarded-for'];
+  if (typeof forwarded === 'string') return forwarded.split(',')[0].trim();
+  return req.ip || 'unknown';
+}
+
+function buildPostVersionHash(input: {
+  title?: string | null;
+  channel?: string | null;
+  caption?: string | null;
+  imageUrl?: string | null;
+  clientName?: string | null;
+  tenantId?: string | null;
+}) {
+  const raw = JSON.stringify({
+    title: input.title || '',
+    channel: input.channel || '',
+    caption: input.caption || '',
+    imageUrl: input.imageUrl || '',
+    clientName: input.clientName || '',
+    tenantId: input.tenantId || '',
+  });
+  return crypto.createHash('sha256').update(raw).digest('hex');
+}
+
+function extractChecklistItems(text: string): string[] {
+  const normalized = text
+    .replace(/\r/g, '\n')
+    .split(/\n|\.\s+|;\s+/)
+    .map((item) => item.trim())
+    .filter((item) => item.length >= 6);
+
+  const dedup = new Set<string>();
+  for (const item of normalized) {
+    const cleaned = item.replace(/^[-*\d.)\s]+/, '').trim();
+    if (cleaned.length >= 6) dedup.add(cleaned);
+  }
+  return Array.from(dedup).slice(0, 10);
+}
+
+app.get('/', (req, res) => {
+  res.json({ message: 'AprovaFlow SaaS API online!' });
+});
+
+app.post('/api/auth/register', async (req, res) => {
+  try {
+    const { name, email, password, agencyName } = req.body;
+
+    if (!email || !password || !agencyName) {
+      return res.status(400).json({ error: 'Preencha todos os campos obrigatorios' });
+    }
+
+    const existingUser = await prisma.user.findUnique({ where: { email } });
+    if (existingUser) return res.status(400).json({ error: 'Email ja cadastrado' });
+
+    const passwordHash = await bcrypt.hash(password, 10);
+
+    const tenant = await prisma.tenant.create({ data: { name: agencyName } });
+    const user = await prisma.user.create({
+      data: { name, email, passwordHash, tenantId: tenant.id },
+    });
+
+    const token = jwt.sign({ userId: user.id, tenantId: tenant.id }, JWT_SECRET, { expiresIn: '7d' });
+
+    res.status(201).json({
+      user: { id: user.id, name: user.name, email: user.email },
+      token,
+      tenantId: tenant.id,
+    });
+  } catch {
+    res.status(500).json({ error: 'Erro ao registrar usuario' });
+  }
+});
+
 app.post('/api/auth/login', async (req, res) => {
   try {
     const { email, password } = req.body;
     const user = await prisma.user.findUnique({ where: { email } });
-    
-    if (!user) return res.status(401).json({ error: 'Credenciais inválidas' });
-    
+
+    if (!user) return res.status(401).json({ error: 'Credenciais invalidas' });
+
     const isValid = await bcrypt.compare(password, user.passwordHash);
-    if (!isValid) return res.status(401).json({ error: 'Credenciais inválidas' });
+    if (!isValid) return res.status(401).json({ error: 'Credenciais invalidas' });
 
     const token = jwt.sign({ userId: user.id, tenantId: user.tenantId }, JWT_SECRET, { expiresIn: '7d' });
     res.json({ user: { id: user.id, name: user.name, email: user.email }, token, tenantId: user.tenantId });
-  } catch (error) {
+  } catch {
     res.status(500).json({ error: 'Erro ao realizar login' });
   }
 });
 
-// Validar se usuário existe pelo Token (Quando reabre o navegador)
 app.get('/api/auth/me', async (req, res) => {
   try {
-    const authHeader = req.headers.authorization;
-    if (!authHeader) return res.status(401).json({ error: 'Não autorizado' });
+    const payload = getTokenPayload(req);
+    if (!payload) return res.status(401).json({ error: 'Nao autorizado' });
 
-    const token = authHeader.split(' ')[1];
-    const payload = jwt.verify(token, JWT_SECRET) as { userId: string, tenantId: string };
-    
     const user = await prisma.user.findUnique({ where: { id: payload.userId } });
-    if (!user) return res.status(401).json({ error: 'Usuário não encontrado' });
-    
+    if (!user) return res.status(401).json({ error: 'Usuario nao encontrado' });
+
     res.json({ user: { id: user.id, name: user.name, email: user.email }, tenantId: user.tenantId });
-  } catch (err) {
-    return res.status(401).json({ error: 'Token inválido' });
+  } catch {
+    return res.status(401).json({ error: 'Token invalido' });
   }
 });
-// ==========================================
-// -------------- AI MAGIC ------------------
-// ==========================================
 
 app.post('/api/ai/improve-copy', async (req, res) => {
   const { caption, tone } = req.body;
-  if (!caption) return res.status(400).json({ error: 'Texto original é obrigatório' });
-  
-  // Gatilho Fantasma: Se o .env não tiver a chave real, devolvemos uma simulação para o Frontend não quebrar sua UI.
+  if (!caption) return res.status(400).json({ error: 'Texto original e obrigatorio' });
+
   if (!process.env.OPENAI_API_KEY || process.env.OPENAI_API_KEY.includes('sua-chave')) {
-    await new Promise(r => setTimeout(r, 2000)); // simula "I.A pensando"
-    const simulacao = `✨ Texto Otimizado por IA Fantasma ✨\n\nEssa é uma simulação de Copy otimizada para o tom [${tone || 'Neutro'}].\nPara ligar os neurônios de verdade, precisamos colocar a OPENAI_API_KEY no arquivo .env!\n\nSeu texto base era: "${caption}"`;
+    await new Promise((r) => setTimeout(r, 1200));
+    const simulacao = `Texto otimizado para tom [${tone || 'neutro'}]. Defina OPENAI_API_KEY para usar IA real.`;
     return res.json({ improvedCopy: simulacao });
   }
 
   try {
     const openai = new OpenAI();
-    let systemPrompt = 'Você é um redator publicitário experiente. Melhore a legenda a seguir para posts de redes sociais.';
-    if (tone === 'persuasive') systemPrompt += ' Use gatilhos mentais e seja altamente persuasivo.';
+    let systemPrompt = 'Voce e um redator publicitario experiente. Melhore a legenda para redes sociais.';
+    if (tone === 'persuasive') systemPrompt += ' Use gatilhos mentais e seja persuasivo.';
     if (tone === 'formal') systemPrompt += ' Seja formal e profissional.';
-    if (tone === 'short') systemPrompt += ' Seja muito direto, curto e engajador.';
+    if (tone === 'short') systemPrompt += ' Seja curto e direto.';
 
     const response = await openai.chat.completions.create({
       model: 'gpt-4o-mini',
       messages: [
         { role: 'system', content: systemPrompt },
-        { role: 'user', content: caption }
+        { role: 'user', content: caption },
       ],
       temperature: 0.7,
     });
 
     res.json({ improvedCopy: response.choices[0].message.content });
-  } catch (error) {
-    console.error(error);
+  } catch {
     res.status(500).json({ error: 'Erro ao gerar texto com IA' });
   }
-});
-// ==========================================
-// -------------- TENANTS & POSTS -----------
-// ==========================================
-
-// Criar Agência Isolada
-app.post('/api/tenants', async (req, res) => {
-  const { name } = req.body;
-  if (!name) return res.status(400).json({ error: 'Nome obrigatório' });
-  const tenant = await prisma.tenant.create({ data: { name } });
-  res.status(201).json(tenant);
 });
 
 app.get('/api/tenantsSettings', async (req, res) => {
   try {
-    const authHeader = req.headers.authorization;
-    if (!authHeader) return res.status(401).json({ error: 'Não autorizado' });
-    const token = authHeader.split(' ')[1];
-    const payload = jwt.verify(token, process.env.JWT_SECRET || 'aprovaflow_super_secret_dev_key') as any;
-    
-    const tenant = await prisma.tenant.findUnique({
-      where: { id: payload.tenantId }
-    });
+    const payload = getTokenPayload(req);
+    if (!payload) return res.status(401).json({ error: 'Nao autorizado' });
+
+    const tenant = await prisma.tenant.findUnique({ where: { id: payload.tenantId } });
     res.json(tenant);
-  } catch(e) {
-    res.status(500).json({ error: 'Erro ao buscar configurações da agência' });
+  } catch {
+    res.status(500).json({ error: 'Erro ao buscar configuracoes da agencia' });
   }
 });
 
-// Atualizar o White-Label da Agência (Rota Protegida JWT)
 app.patch('/api/tenantsSettings', async (req, res) => {
   try {
-    const authHeader = req.headers.authorization;
-    if (!authHeader) return res.status(401).json({ error: 'Não autorizado' });
-    const token = authHeader.split(' ')[1];
-    const payload = jwt.verify(token, process.env.JWT_SECRET || 'aprovaflow_super_secret_dev_key') as any;
-    
-    const { logoUrl, themeColor } = req.body;
+    const payload = getTokenPayload(req);
+    if (!payload) return res.status(401).json({ error: 'Nao autorizado' });
+
+    const { logoUrl, themeColor, customDomain } = req.body;
+    const tenant = await prisma.tenant.findUnique({ where: { id: payload.tenantId } });
+    if (!tenant) return res.status(404).json({ error: 'Agencia nao encontrada' });
+
+    if (typeof customDomain === 'string' && customDomain.trim() && !tenant.isPro) {
+      return res.status(403).json({ error: 'Dominio personalizado disponivel apenas no plano Pro' });
+    }
+
+    const data: any = { logoUrl, themeColor };
+    if (tenant.isPro && typeof customDomain === 'string') {
+      data.customDomain = customDomain.trim();
+    }
+
     const updated = await prisma.tenant.update({
       where: { id: payload.tenantId },
-      data: { logoUrl, themeColor }
+      data,
     });
+    emitTenantDashboardUpdate(updated.id, 'tenant_settings_updated');
     res.json(updated);
-  } catch(e) {
-    console.error("ERRO NO PATCH TENANT:", e);
-    res.status(500).json({ error: 'Erro ao atualizar configurações da agência' });
+  } catch (e) {
+    console.error('ERRO NO PATCH TENANT:', e);
+    res.status(500).json({ error: 'Erro ao atualizar configuracoes da agencia' });
   }
 });
 
-// Buscar todos os posts (Dashboard da Agência)
+app.post('/api/billing/upgrade-pro', async (req, res) => {
+  try {
+    const payload = getTokenPayload(req);
+    if (!payload) return res.status(401).json({ error: 'Nao autorizado' });
+
+    const updated = await prisma.tenant.update({
+      where: { id: payload.tenantId },
+      data: { isPro: true },
+    });
+
+    emitTenantDashboardUpdate(updated.id, 'billing_upgraded_pro');
+    res.json({ message: 'Plano Pro ativado com sucesso', tenant: updated });
+  } catch {
+    res.status(500).json({ error: 'Erro ao ativar plano Pro' });
+  }
+});
+
 app.get('/api/posts', async (req, res) => {
-  // OBS: Como essa rota NÃO TEM o Middleware "Auth" ainda para ser rápido o MVP, 
-  // nós vamos injetar ele do Frontend. O certo será tirar daqui e puxar do TOKEN.
-  const { tenantId } = req.query;
-  if (!tenantId) return res.status(400).json({ error: 'tenantId obrigatório' });
-  
-  const exists = await prisma.tenant.findUnique({ where: { id: String(tenantId) } });
+  let tenantId = String(req.query.tenantId || '');
+
+  if (!tenantId) {
+    const payload = getTokenPayload(req);
+    tenantId = payload?.tenantId || '';
+  }
+
+  if (!tenantId) return res.status(400).json({ error: 'tenantId obrigatorio' });
+
+  const exists = await prisma.tenant.findUnique({ where: { id: tenantId } });
   if (!exists) {
-    await prisma.tenant.create({ data: { id: String(tenantId), name: "Agência Teste (MVP)" } });
+    await prisma.tenant.create({ data: { id: tenantId, name: 'Agencia Teste (MVP)' } });
   }
 
   const posts = await prisma.post.findMany({
-    where: { tenantId: String(tenantId) },
+    where: { tenantId },
     orderBy: { createdAt: 'desc' },
-    include: { comments: true }
+    include: {
+      comments: { orderBy: { createdAt: 'asc' } },
+      tasks: { orderBy: { createdAt: 'asc' } },
+      approvalEvents: { orderBy: { createdAt: 'desc' } },
+    },
   });
   res.json(posts);
 });
 
-// Criar um novo post
 app.post('/api/posts', async (req, res) => {
-  const { title, channel, caption, imageUrl, tenantId, clientName } = req.body;
-  if (!tenantId) return res.status(400).json({ error: 'tenantId obrigatório' });
+  const { title, channel, caption, imageUrl, tenantId, clientName, slaHours } = req.body;
+  if (!tenantId) return res.status(400).json({ error: 'tenantId obrigatorio' });
+  if (!clientName || !String(clientName).trim()) {
+    return res.status(400).json({ error: 'Nome do cliente obrigatorio' });
+  }
+
+  const normalizedSlaHours = Number.isFinite(Number(slaHours)) ? Math.max(1, Number(slaHours)) : 48;
+  const dueAt = new Date(Date.now() + normalizedSlaHours * 60 * 60 * 1000);
+  const versionHash = buildPostVersionHash({ title, channel, caption, imageUrl, clientName, tenantId });
 
   const post = await prisma.post.create({
-    data: { title, channel, caption, imageUrl, clientName, tenantId }
+    data: {
+      title,
+      channel,
+      caption,
+      imageUrl,
+      clientName: String(clientName).trim(),
+      tenantId,
+      slaHours: normalizedSlaHours,
+      dueAt,
+      version: 1,
+      currentVersionHash: versionHash,
+      approvalEvents: {
+        create: {
+          actorName: 'Agency',
+          action: 'CREATED',
+          postVersion: 1,
+          versionHash,
+          ipAddress: getClientIp(req),
+          userAgent: req.headers['user-agent'] || 'unknown',
+          meta: { source: 'api/posts:create' },
+        },
+      },
+    },
+    include: {
+      comments: true,
+      tasks: true,
+      approvalEvents: true,
+    },
   });
+
+  emitTenantDashboardUpdate(post.tenantId, 'post_created');
   res.status(201).json(post);
 });
 
-// Buscar um Post específico para a Página de Aprovação Pública (com dados Visuais da Agência inclusos!)
 app.get('/api/posts/:id', async (req, res) => {
   try {
     const post = await prisma.post.findUnique({
       where: { id: req.params.id },
-      include: { 
+      include: {
         comments: { orderBy: { createdAt: 'asc' } },
+        tasks: { orderBy: { createdAt: 'asc' } },
+        approvalEvents: { orderBy: { createdAt: 'desc' } },
         tenant: {
-          select: { name: true, logoUrl: true, themeColor: true }
-        }
-      }
+          select: { name: true, logoUrl: true, themeColor: true, customDomain: true, isPro: true },
+        },
+      },
     });
-    if (!post) return res.status(404).json({ error: 'Post não encontrado' });
+    if (!post) return res.status(404).json({ error: 'Post nao encontrado' });
     res.json(post);
-  } catch (error) {
+  } catch {
     res.status(500).json({ error: 'Erro ao buscar post' });
   }
 });
 
-// Mudar status (Aprovar/Reprovar)
+app.get('/api/posts/:id/audit', async (req, res) => {
+  try {
+    const events = await prisma.approvalEvent.findMany({
+      where: { postId: req.params.id },
+      orderBy: { createdAt: 'desc' },
+    });
+    res.json(events);
+  } catch {
+    res.status(500).json({ error: 'Erro ao buscar trilha de aprovacao' });
+  }
+});
+
 app.patch('/api/posts/:id/status', async (req, res) => {
-  const { status } = req.body;
+  const { status, actorName } = req.body;
   const post = await prisma.post.update({
     where: { id: req.params.id },
-    data: { status }
+    data: { status },
   });
+
+  await prisma.approvalEvent.create({
+    data: {
+      postId: post.id,
+      actorName: String(actorName || 'Agency'),
+      action: status,
+      postVersion: post.version,
+      versionHash: post.currentVersionHash,
+      ipAddress: getClientIp(req),
+      userAgent: req.headers['user-agent'] || 'unknown',
+      meta: { source: 'api/posts/:id/status' },
+    },
+  });
+
+  emitTenantDashboardUpdate(post.tenantId, 'post_status_updated');
   res.json(post);
 });
 
-// Excluir Post
+app.post('/api/posts/:id/publish', async (req, res) => {
+  const post = await prisma.post.findUnique({ where: { id: req.params.id } });
+  if (!post) return res.status(404).json({ error: 'Post nao encontrado' });
+  if (post.status !== 'APPROVED') {
+    return res.status(409).json({ error: 'So e permitido publicar post aprovado' });
+  }
+
+  const published = await prisma.post.update({
+    where: { id: post.id },
+    data: { publishedAt: new Date() },
+  });
+
+  await prisma.approvalEvent.create({
+    data: {
+      postId: post.id,
+      actorName: 'Agency',
+      action: 'PUBLISHED',
+      postVersion: post.version,
+      versionHash: post.currentVersionHash,
+      ipAddress: getClientIp(req),
+      userAgent: req.headers['user-agent'] || 'unknown',
+      meta: { source: 'api/posts/:id/publish' },
+    },
+  });
+
+  emitTenantDashboardUpdate(post.tenantId, 'post_published');
+  res.json(published);
+});
+
 app.delete('/api/posts/:id', async (req, res) => {
-  await prisma.post.delete({ where: { id: req.params.id } });
+  const deleted = await prisma.post.delete({ where: { id: req.params.id } });
+  emitTenantDashboardUpdate(deleted.tenantId, 'post_deleted');
   res.status(204).send();
 });
 
-// ==========================================
-// -------------- COMMENTS ------------------
-// ==========================================
 app.post('/api/posts/:id/comments', async (req, res) => {
-  const { text, author } = req.body;
+  const { text, author, action } = req.body;
+  if (!author || !String(author).trim()) {
+    return res.status(400).json({ error: 'Nome do aprovador e obrigatorio' });
+  }
+  if (!text || !String(text).trim()) {
+    return res.status(400).json({ error: 'Comentario obrigatorio' });
+  }
+
+  const normalizedText = String(text).trim();
+  const normalizedAuthor = String(author).trim();
+  const normalizedAction = String(action || 'comment').toUpperCase();
+
+  const post = await prisma.post.findUnique({ where: { id: req.params.id } });
+  if (!post) return res.status(404).json({ error: 'Post nao encontrado' });
+
   const comment = await prisma.comment.create({
-    data: { text, author, postId: req.params.id }
+    data: { text: normalizedText, author: normalizedAuthor, postId: req.params.id, actionType: normalizedAction },
   });
+
+  const checklist = extractChecklistItems(normalizedText);
+  if (checklist.length > 0) {
+    await prisma.taskItem.createMany({
+      data: checklist.map((title) => ({
+        postId: req.params.id,
+        title,
+        sourceCommentId: comment.id,
+      })),
+    });
+  }
+
+  await prisma.approvalEvent.create({
+    data: {
+      postId: req.params.id,
+      actorName: normalizedAuthor,
+      action: normalizedAction,
+      postVersion: post.version,
+      versionHash: post.currentVersionHash,
+      ipAddress: getClientIp(req),
+      userAgent: req.headers['user-agent'] || 'unknown',
+      meta: { source: 'api/posts/:id/comments', commentId: comment.id },
+    },
+  });
+
+  emitTenantDashboardUpdate(post.tenantId, 'post_comment_created');
   res.status(201).json(comment);
 });
 
-const PORT = 3000;
-app.listen(PORT, () => {
-  console.log(`🚀 API: Módulo de Autenticação INJETADO. Servidor rodando na porta ${PORT}!`);
+app.patch('/api/tasks/:id', async (req, res) => {
+  const { done } = req.body;
+  const task = await prisma.taskItem.update({
+    where: { id: req.params.id },
+    data: { done: Boolean(done) },
+    include: {
+      post: {
+        select: { tenantId: true },
+      },
+    },
+  });
+  emitTenantDashboardUpdate(task.post?.tenantId, 'task_updated');
+  res.json({
+    id: task.id,
+    title: task.title,
+    done: task.done,
+    createdAt: task.createdAt,
+    updatedAt: task.updatedAt,
+    postId: task.postId,
+  });
 });
+
+app.get('/api/sla/alerts', async (req, res) => {
+  const payload = getTokenPayload(req);
+  if (!payload) return res.status(401).json({ error: 'Nao autorizado' });
+
+  const now = new Date();
+  const overdue = await prisma.post.findMany({
+    where: {
+      tenantId: payload.tenantId,
+      status: { in: ['PENDING', 'ADJUSTMENT'] },
+      dueAt: { not: null, lt: now },
+      publishedAt: null,
+    },
+    orderBy: { dueAt: 'asc' },
+    select: {
+      id: true,
+      title: true,
+      clientName: true,
+      dueAt: true,
+      status: true,
+    },
+  });
+
+  res.json({ alerts: overdue, total: overdue.length });
+});
+
+async function dispatchSlaReminders() {
+  const now = new Date();
+  const threshold = new Date(now.getTime() - 60 * 60 * 1000);
+  const overdue = await prisma.post.findMany({
+    where: {
+      status: { in: ['PENDING', 'ADJUSTMENT'] },
+      publishedAt: null,
+      dueAt: { not: null, lt: now },
+      OR: [{ lastReminderAt: null }, { lastReminderAt: { lt: threshold } }],
+    },
+    select: { id: true, tenantId: true, version: true, currentVersionHash: true },
+    take: 100,
+  });
+
+  for (const post of overdue) {
+    await prisma.post.update({
+      where: { id: post.id },
+      data: { lastReminderAt: now },
+    });
+
+    await prisma.approvalEvent.create({
+      data: {
+        postId: post.id,
+        actorName: 'System',
+        action: 'SLA_REMINDER_TRIGGERED',
+        postVersion: post.version,
+        versionHash: post.currentVersionHash,
+        ipAddress: 'system',
+        userAgent: 'scheduler',
+        meta: { source: 'sla-dispatcher', timestamp: now.toISOString() },
+      },
+    });
+    emitTenantDashboardUpdate(post.tenantId, 'sla_reminder_triggered');
+  }
+}
+
+const PORT = 3000;
+httpServer.listen(PORT, () => {
+  console.log(`API rodando na porta ${PORT}`);
+});
+
+setInterval(() => {
+  dispatchSlaReminders().catch(() => {
+    // Mantem o processo online mesmo se houver falha pontual no job.
+  });
+}, 5 * 60 * 1000);
