@@ -79,7 +79,7 @@ export default function Settings() {
       updateTenantSettings({ themeColor: form.themeColor, logoUrl: '' });
       setMessage('Logo removida com sucesso.');
       setTimeout(() => setMessage(''), 3000);
-    } catch (err) {
+    } catch {
       setMessage('Erro ao remover logo.');
     } finally {
       setIsSaving(false);
@@ -127,17 +127,32 @@ export default function Settings() {
     }
   };
 
+  const redirectToStripeUrl = (url) => {
+    if (!url) throw new Error('URL de redirecionamento invalida.');
+    window.location.assign(url);
+  };
+
   const handleUpgradeToPro = async () => {
     setIsSaving(true);
     setMessage('');
     try {
-      const res = await api.post('/billing/upgrade-pro');
-      setIsPro(true);
-      updateTenantSettings({ isPro: true, ...(res?.data?.tenant || {}) });
-      setMessage('Plano Pro ativado. Dominio personalizado liberado.');
-      setTimeout(() => setMessage(''), 4000);
+      const res = await api.post('/billing/checkout-session', { interval: 'monthly' });
+      redirectToStripeUrl(res?.data?.url);
     } catch (err) {
-      setMessage('Nao foi possivel ativar o plano Pro agora.');
+      setMessage(err?.response?.data?.error || 'Nao foi possivel iniciar o checkout do plano Pro.');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleManagePlan = async () => {
+    setIsSaving(true);
+    setMessage('');
+    try {
+      const res = await api.post('/billing/portal-session');
+      redirectToStripeUrl(res?.data?.url);
+    } catch (err) {
+      setMessage(err?.response?.data?.error || 'Nao foi possivel abrir o portal de cobranca.');
     } finally {
       setIsSaving(false);
     }
@@ -296,6 +311,9 @@ export default function Settings() {
 
             {isPro ? (
               <>
+                <div className="mb-4 rounded-xl border border-emerald-500/25 bg-emerald-500/10 p-3 text-xs font-medium text-emerald-200">
+                  Plano Pro ativo. Dominio personalizado liberado para sua agencia.
+                </div>
                 <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500">Dominio Personalizado</p>
                 <div className="rounded-2xl border border-cyan-900/40 bg-[#0c121c] p-3">
                   <div className="flex flex-wrap items-center gap-2">
@@ -314,6 +332,14 @@ export default function Settings() {
                   Adicione um registro CNAME apontando <span className="font-semibold text-cyan-200">portal.yourcompany.com</span> para{' '}
                   <span className="font-semibold text-cyan-200">lb.aprovaflow.com</span> no seu provedor DNS.
                 </p>
+                <button
+                  type="button"
+                  onClick={handleManagePlan}
+                  disabled={isSaving}
+                  className="mt-4 w-full rounded-xl border border-cyan-700/40 bg-cyan-500/10 px-4 py-2.5 text-xs font-extrabold uppercase tracking-wide text-cyan-200 transition hover:bg-cyan-500/15 disabled:opacity-60"
+                >
+                  {isSaving ? 'Abrindo portal...' : 'Gerenciar Assinatura'}
+                </button>
               </>
             ) : (
               <div className="min-h-[210px] rounded-2xl border border-cyan-900/40 bg-[#0c121c] flex flex-col items-center justify-center text-center px-5">

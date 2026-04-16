@@ -35,7 +35,7 @@ function CreatePost() {
     try {
       const res = await improveCopyWithAI(form.caption, tone);
       setForm(prev => ({ ...prev, caption: res.improvedCopy }));
-    } catch (err) {
+    } catch {
       setError("Falha ao contatar a inteligência artificial.");
     } finally {
       setIsImproving(false);

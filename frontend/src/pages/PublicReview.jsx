@@ -103,7 +103,7 @@ function PublicReview() {
     try {
       const result = await updatePostById(post.id, { status: 'pending' })
       if (result) setPost((prev) => ({ ...prev, status: 'pending' }))
-    } catch (e) {
+    } catch {
       // ignore
     } finally {
       setIsSubmitting(false)
@@ -133,7 +133,6 @@ function PublicReview() {
   const brandColor = post?.tenant?.themeColor || '#059669'
   const agencyLogo = post?.tenant?.logoUrl || ''
   const agencyName = post?.tenant?.name || 'Agência'
-  const bgSoftColor = hexToRgba(brandColor, 0.05)
 
   return (
     <div className="min-h-screen bg-[#050B14] bg-dots-pattern">

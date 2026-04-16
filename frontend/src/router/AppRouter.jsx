@@ -1,4 +1,4 @@
-import { BrowserRouter, Route, Routes } from 'react-router-dom'
+import { Route, Routes } from 'react-router-dom'
 import { AuthProvider } from '../context/AuthContext'
 import MainLayout from '../components/layout/MainLayout'
 import ProtectedRoute from '../components/ProtectedRoute'
@@ -6,6 +6,8 @@ import CreatePost from '../pages/CreatePost'
 import Dashboard from '../pages/Dashboard'
 import PublicReview from '../pages/PublicReview'
 import AuthPage from '../pages/AuthPage'
+import ForgotPassword from '../pages/ForgotPassword'
+import ResetPassword from '../pages/ResetPassword'
 import Landing from '../pages/Landing'
 import Settings from '../pages/Settings'
 import Kanban from '../pages/Kanban'
@@ -20,6 +22,8 @@ function AppRouter() {
         <Route path="/" element={<Landing />} />
         <Route path="/login" element={<AuthPage />} />
         <Route path="/register" element={<AuthPage />} />
+        <Route path="/forgot-password" element={<ForgotPassword />} />
+        <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="/review/:slug" element={<PublicReview />} />
 
         {/* Rotas Privadas (Por Trás da Parede de Pagamento/Login) */}

@@ -4,7 +4,7 @@ import { io } from 'socket.io-client'
 import { 
   Menu, Pencil, Trash2, 
   Clock, CheckCircle, RotateCw, Activity, 
-  FileText, Link2, ExternalLink, Plus, Sparkles, AlertCircle, Upload, ListChecks, ShieldCheck
+  FileText, Link2, ExternalLink, AlertCircle, Upload, ListChecks, ShieldCheck
 } from 'lucide-react'
 import StatusBadge from '../components/ui/StatusBadge'
 import { deletePostById, listPosts, updatePostById, createPost, publishPostById, listSlaAlerts, updateTaskById } from '../services/reviewService'
@@ -269,18 +269,11 @@ function Dashboard() {
       const updatedPost = await updatePostById(editingPost.id, { ...editForm, image_url: nextImageUrl })
       setPosts(prev => prev.map(p => p.id === updatedPost.id ? updatedPost : p))
       setIsEditModalOpen(false)
-    } catch (e) {
+    } catch {
       setError('Falha ao atualizar o projeto.')
     } finally {
       setIsSavingEdit(false)
     }
-  }
-
-  // Create Handlers (Simulated or Real if createPost exists)
-  const openCreateModal = () => {
-    setEditImageFile(null)
-    setEditForm({ title: '', clientName: '', channel: 'Instagram', caption: '', status: 'pending', public_slug: '', image_url: '' })
-    setIsCreateModalOpen(true)
   }
 
   const handleCreateSave = async () => {
@@ -313,7 +306,7 @@ function Dashboard() {
         setPosts([{ id: Date.now(), ...newPostData, created_at: new Date().toISOString() }, ...posts])
       }
       setIsCreateModalOpen(false)
-    } catch (e) {
+    } catch {
       setError('Falha ao criar projeto.')
     } finally {
       setIsCreatingPost(false)
@@ -340,8 +333,8 @@ function Dashboard() {
       setPosts((prev) => prev.map((p) => (p.id === updated.id ? updated : p)))
       setCopyFeedback('Post publicado com seguranca.')
       setTimeout(() => setCopyFeedback(''), 2500)
-    } catch (e) {
-      setError(e?.response?.data?.error || 'Nao foi possivel publicar o post.')
+    } catch (error) {
+      setError(error?.response?.data?.error || 'Nao foi possivel publicar o post.')
     }
   }
 

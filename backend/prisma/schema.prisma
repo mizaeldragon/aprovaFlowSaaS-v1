@@ -13,6 +13,11 @@ model Tenant {
   themeColor   String?  @default("#0f172a")
   customDomain String?
   isPro        Boolean  @default(false)
+  stripeCustomerId       String?   @unique
+  stripeSubscriptionId   String?   @unique
+  stripePriceId          String?
+  stripeSubscriptionStatus String?
+  stripeCurrentPeriodEnd DateTime?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
@@ -25,6 +30,8 @@ model User {
   email        String   @unique
   name         String?
   passwordHash String
+  resetPasswordTokenHash String?
+  resetPasswordExpiresAt DateTime?
   tenantId     String
   tenant       Tenant   @relation(fields: [tenantId], references: [id])
   createdAt    DateTime @default(now())

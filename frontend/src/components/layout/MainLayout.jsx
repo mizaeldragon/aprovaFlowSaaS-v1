@@ -1,5 +1,6 @@
-﻿import { NavLink, useNavigate, useLocation } from 'react-router-dom'
+import { NavLink, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
+import api from '../../services/api'
 import {
   LogOut,
   LayoutDashboard,
@@ -29,6 +30,25 @@ function MainLayout({ children }) {
   const handleLogout = () => {
     logout()
     navigate('/login')
+  }
+
+  const handlePlanClick = async () => {
+    if (!tenant?.isPro) {
+      navigate('/settings')
+      return
+    }
+
+    try {
+      const res = await api.post('/billing/portal-session')
+      const portalUrl = res?.data?.url
+      if (portalUrl) {
+        window.location.assign(portalUrl)
+        return
+      }
+      navigate('/settings')
+    } catch {
+      navigate('/settings')
+    }
   }
 
   const getInitial = (name) => {
@@ -78,7 +98,7 @@ function MainLayout({ children }) {
               {tenant?.isPro ? 'Plano Pro ativo.' : 'Limite da conta atingido.'}
             </p>
             <button
-              onClick={() => navigate('/settings')}
+              onClick={handlePlanClick}
               className="w-full py-2 rounded-xl text-[11px] font-extrabold uppercase tracking-wider transition-all"
               style={{
                 backgroundImage: 'linear-gradient(to right, var(--brand-color-light), var(--brand-color))',
@@ -166,3 +186,4 @@ function MainLayout({ children }) {
 }
 
 export default MainLayout
+
