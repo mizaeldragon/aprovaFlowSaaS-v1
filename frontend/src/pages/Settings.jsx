@@ -336,7 +336,7 @@ export default function Settings() {
                   type="button"
                   onClick={handleManagePlan}
                   disabled={isSaving}
-                  className="mt-4 w-full rounded-xl border border-cyan-700/40 bg-cyan-500/10 px-4 py-2.5 text-xs font-extrabold uppercase tracking-wide text-cyan-200 transition hover:bg-cyan-500/15 disabled:opacity-60"
+                  className="mt-4 w-full rounded-xl border border-cyan-700/40 bg-cyan-500/10 px-4 py-2.5 text-xs font-extrabold uppercase tracking-wide text-white transition hover:bg-cyan-500/15 disabled:opacity-60"
                 >
                   {isSaving ? 'Abrindo portal...' : 'Gerenciar Assinatura'}
                 </button>

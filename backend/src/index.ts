@@ -980,6 +980,50 @@ app.get('/api/sla/alerts', async (req, res) => {
   res.json({ alerts: overdue, total: overdue.length });
 });
 
+app.get('/api/approval-events/recent', async (req, res) => {
+  const payload = getTokenPayload(req);
+  if (!payload) return res.status(401).json({ error: 'Nao autorizado' });
+
+  const parsedLimit = Number(req.query.limit || 20);
+  const limit = Number.isFinite(parsedLimit) ? Math.min(Math.max(parsedLimit, 1), 50) : 20;
+
+  const events = await prisma.approvalEvent.findMany({
+    where: {
+      post: {
+        tenantId: payload.tenantId,
+      },
+    },
+    orderBy: { createdAt: 'desc' },
+    take: limit,
+    include: {
+      post: {
+        select: {
+          id: true,
+          title: true,
+          clientName: true,
+          channel: true,
+        },
+      },
+    },
+  });
+
+  res.json({
+    events: events.map((event) => ({
+      id: event.id,
+      action: event.action,
+      actorName: event.actorName,
+      createdAt: event.createdAt,
+      postVersion: event.postVersion,
+      versionHash: event.versionHash,
+      postId: event.postId,
+      postTitle: event.post?.title || 'Sem titulo',
+      clientName: event.post?.clientName || '',
+      channel: event.post?.channel || '',
+    })),
+    total: events.length,
+  });
+});
+
 async function dispatchSlaReminders() {
   const now = new Date();
   const threshold = new Date(now.getTime() - 60 * 60 * 1000);

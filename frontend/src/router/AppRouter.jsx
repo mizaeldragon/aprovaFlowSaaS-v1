@@ -13,6 +13,7 @@ import Settings from '../pages/Settings'
 import Kanban from '../pages/Kanban'
 import Customers from '../pages/Customers'
 import CopyAI from '../pages/CopyAI'
+import Projects from '../pages/Projects'
 
 function AppRouter() {
   return (
@@ -83,6 +84,16 @@ function AppRouter() {
             <ProtectedRoute>
               <MainLayout>
                 <CopyAI />
+              </MainLayout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/projects"
+          element={
+            <ProtectedRoute>
+              <MainLayout>
+                <Projects />
               </MainLayout>
             </ProtectedRoute>
           }

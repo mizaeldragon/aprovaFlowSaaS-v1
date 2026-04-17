@@ -1,10 +1,13 @@
-import { useState, useEffect } from 'react'
+import { useMemo, useState, useEffect } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import api from '../services/api'
 import { Kanban as KanbanIcon, Clock, CheckCircle2, AlertCircle, MoreHorizontal } from 'lucide-react'
 
 function Kanban() {
+  const [searchParams] = useSearchParams()
   const [posts, setPosts] = useState([])
   const [isLoading, setIsLoading] = useState(true)
+  const clientFilter = String(searchParams.get('client') || '').trim().toLowerCase()
 
   useEffect(() => {
     const fetchPosts = async () => {
@@ -28,7 +31,12 @@ function Kanban() {
     { id: 'APPROVED', title: 'Aprovados', icon: CheckCircle2, color: 'text-cyan-400', bg: 'bg-cyan-400/10', border: 'rgba(var(--brand-rgb),0.35)' },
   ]
 
-  const getFilteredPosts = (status) => posts.filter(post => post.status === status)
+  const visiblePosts = useMemo(() => {
+    if (!clientFilter) return posts
+    return posts.filter((post) => String(post.clientName || '').toLowerCase().includes(clientFilter))
+  }, [posts, clientFilter])
+
+  const getFilteredPosts = (status) => visiblePosts.filter(post => post.status === status)
 
   if (isLoading) {
     return <div className="flex h-[60vh] items-center justify-center animate-pulse text-slate-500 font-bold uppercase tracking-widest text-xs">Sincronizando Fluxo...</div>
@@ -46,8 +54,13 @@ function Kanban() {
         <div className="flex gap-4">
           <div className="flex items-center gap-2 bg-[#0c121c] px-4 py-2 rounded-xl border border-slate-700/70">
             <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse"></span>
-            <span className="text-[10px] font-bold text-slate-300 uppercase tracking-widest">{posts.length} Obras Ativas</span>
+            <span className="text-[10px] font-bold text-slate-300 uppercase tracking-widest">{visiblePosts.length} Obras Ativas</span>
           </div>
+          {clientFilter ? (
+            <div className="text-[10px] font-bold uppercase tracking-widest text-cyan-300">
+              Cliente: {searchParams.get('client')}
+            </div>
+          ) : null}
         </div>
       </div>
 

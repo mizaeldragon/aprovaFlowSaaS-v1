@@ -4,7 +4,7 @@ import { io } from 'socket.io-client'
 import { 
   Menu, Pencil, Trash2, 
   Clock, CheckCircle, RotateCw, Activity, 
-  FileText, Link2, ExternalLink, AlertCircle, Upload, ListChecks, ShieldCheck
+  FileText, Link2, ExternalLink, AlertCircle, Upload, ListChecks, ShieldCheck, ChevronLeft, ChevronRight
 } from 'lucide-react'
 import StatusBadge from '../components/ui/StatusBadge'
 import { deletePostById, listPosts, updatePostById, createPost, publishPostById, listSlaAlerts, updateTaskById } from '../services/reviewService'
@@ -14,17 +14,17 @@ const ALLOWED_CHANNELS = ['Instagram', 'LinkedIn', 'Facebook']
 
 function Dashboard() {
   const [posts, setPosts] = useState([])
-  const [selectedPostId, setSelectedPostId] = useState(null)
   
-  const [loadingPosts, setLoadingPosts] = useState(true)
   const [slaAlerts, setSlaAlerts] = useState([])
   const [copyFeedback, setCopyFeedback] = useState('')
   const [error, setError] = useState('')
   const [chartRange, setChartRange] = useState('week')
+  const [eventsPage, setEventsPage] = useState(1)
+  const [tasksPage, setTasksPage] = useState(1)
   
   // Menus and Modals
   const [openMenuPostId, setOpenMenuPostId] = useState(null)
-  const [menuPosition, setMenuPosition] = useState({ top: 0, left: 0 })
+  const [menuPosition, _setMenuPosition] = useState({ top: 0, left: 0 })
   
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
   const [editingPost, setEditingPost] = useState(null)
@@ -43,16 +43,53 @@ function Dashboard() {
   })
 
   const actionsMenuRef = useRef(null)
-  const menuButtonRefs = useRef(new Map())
   const complianceSectionRef = useRef(null)
-  const selectedPost = posts.find((p) => p.id === selectedPostId) || null
+  const realtimeRefreshTimerRef = useRef(null)
+  const EVENTS_PER_PAGE = 5
+  const TASKS_PER_PAGE = 5
+
+  const timelineEvents = useMemo(
+    () =>
+      posts.flatMap((post) =>
+        (post.approval_events || []).map((event) => ({
+          ...event,
+          postId: post.id,
+          postTitle: post.title,
+          clientName: post.clientName,
+        }))
+      ),
+    [posts]
+  )
+
+  const checklistTasks = useMemo(
+    () =>
+      posts.flatMap((post) =>
+        (post.tasks || []).map((task) => ({
+          ...task,
+          postId: post.id,
+          postTitle: post.title,
+          clientName: post.clientName,
+        }))
+      ),
+    [posts]
+  )
+
+  const eventsTotalPages = Math.max(1, Math.ceil(timelineEvents.length / EVENTS_PER_PAGE))
+  const paginatedEvents = useMemo(() => {
+    const start = (eventsPage - 1) * EVENTS_PER_PAGE
+    return timelineEvents.slice(start, start + EVENTS_PER_PAGE)
+  }, [timelineEvents, eventsPage])
+
+  const tasksTotalPages = Math.max(1, Math.ceil(checklistTasks.length / TASKS_PER_PAGE))
+  const paginatedTasks = useMemo(() => {
+    const start = (tasksPage - 1) * TASKS_PER_PAGE
+    return checklistTasks.slice(start, start + TASKS_PER_PAGE)
+  }, [checklistTasks, tasksPage])
   // --- Data Fetching ---
-  const loadDashboardData = useCallback(async ({ withLoader = false } = {}) => {
-    if (withLoader) setLoadingPosts(true)
+  const loadDashboardData = useCallback(async () => {
     try {
       const data = await listPosts()
       setPosts(data)
-      setSelectedPostId((currentId) => (data.some((item) => item.id === currentId) ? currentId : (data[0]?.id ?? null)))
       try {
         const alerts = await listSlaAlerts()
         setSlaAlerts(alerts?.alerts || [])
@@ -61,16 +98,20 @@ function Dashboard() {
       }
     } catch {
       setError('Nao foi possivel carregar os projetos.')
-    } finally {
-      if (withLoader) setLoadingPosts(false)
     }
   }, [])
 
   useEffect(() => {
-    loadDashboardData({ withLoader: true })
-    const timer = window.setInterval(() => loadDashboardData(), 15000)
-    return () => window.clearInterval(timer)
+    loadDashboardData()
   }, [loadDashboardData])
+
+  useEffect(() => {
+    setEventsPage((current) => Math.min(current, eventsTotalPages))
+  }, [eventsTotalPages])
+
+  useEffect(() => {
+    setTasksPage((current) => Math.min(current, tasksTotalPages))
+  }, [tasksTotalPages])
 
   useEffect(() => {
     const rawApi = import.meta.env.VITE_API_URL || 'http://localhost:3000/api'
@@ -83,11 +124,37 @@ function Dashboard() {
       query: { tenantId },
     })
 
-    socket.on('dashboard:update', () => {
+    const requestRealtimeRefresh = () => {
+      if (realtimeRefreshTimerRef.current) {
+        window.clearTimeout(realtimeRefreshTimerRef.current)
+      }
+      // Agrupa eventos seguidos para evitar rajada de requests em producao.
+      realtimeRefreshTimerRef.current = window.setTimeout(() => {
+        loadDashboardData()
+      }, 450)
+    }
+
+    socket.on('dashboard:update', requestRealtimeRefresh)
+    socket.on('connect', () => {
       loadDashboardData()
     })
 
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        loadDashboardData()
+      }
+    }
+    const onWindowFocus = () => loadDashboardData()
+
+    document.addEventListener('visibilitychange', onVisibilityChange)
+    window.addEventListener('focus', onWindowFocus)
+
     return () => {
+      if (realtimeRefreshTimerRef.current) {
+        window.clearTimeout(realtimeRefreshTimerRef.current)
+      }
+      document.removeEventListener('visibilitychange', onVisibilityChange)
+      window.removeEventListener('focus', onWindowFocus)
       socket.disconnect()
     }
   }, [loadDashboardData])
@@ -212,8 +279,6 @@ function Dashboard() {
   useEffect(() => {
     const handleClickOutside = (e) => {
       if (actionsMenuRef.current?.contains(e.target)) return
-      const activeButton = menuButtonRefs.current.get(openMenuPostId)
-      if (activeButton?.contains(e.target)) return
       setOpenMenuPostId(null)
     }
     const handleViewportChange = () => setOpenMenuPostId(null)
@@ -226,17 +291,6 @@ function Dashboard() {
       window.removeEventListener('scroll', handleViewportChange, true)
     }
   }, [openMenuPostId])
-
-  const handleToggleMenu = (e, postId) => {
-    e.stopPropagation()
-    if (openMenuPostId === postId) {
-      setOpenMenuPostId(null)
-      return
-    }
-    const rect = e.currentTarget.getBoundingClientRect()
-    setMenuPosition({ top: rect.bottom + 8, left: Math.max(rect.right - 192, 12) })
-    setOpenMenuPostId(postId)
-  }
 
   const handleCopyPublicLink = async (slug) => {
     const url = `${window.location.origin}/review/${slug}`
@@ -364,18 +418,47 @@ function Dashboard() {
   }
 
   const handleOrbitDetails = () => {
-    if (!orbitPost?.id) return
-    setSelectedPostId(orbitPost.id)
-    const rowElement = document.getElementById(`post-row-${orbitPost.id}`)
-    if (rowElement) {
-      rowElement.scrollIntoView({ behavior: 'smooth', block: 'center' })
-      return
-    }
     complianceSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }
 
+  const renderPaginationControls = ({ page, totalPages, totalItems, itemsPerPage, onChange }) => {
+    if (totalItems <= 0) return null
+    const start = (page - 1) * itemsPerPage + 1
+    const end = Math.min(page * itemsPerPage, totalItems)
+    return (
+      <div className="mt-4 flex items-center justify-between gap-3">
+        <p className="text-sm font-semibold text-slate-400">
+          Mostrando {start} - {end} de {totalItems}
+        </p>
+        <div className="flex items-center gap-3">
+          <span className="text-sm font-semibold text-slate-300">Pagina {page} de {totalPages}</span>
+          <div className="flex overflow-hidden rounded-full border border-slate-600 bg-slate-800/70">
+            <button
+              type="button"
+              onClick={() => onChange(page - 1)}
+              disabled={page <= 1}
+              className="px-3 py-2 text-slate-300 transition-colors hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-40"
+              aria-label="Pagina anterior"
+            >
+              <ChevronLeft size={14} />
+            </button>
+            <button
+              type="button"
+              onClick={() => onChange(page + 1)}
+              disabled={page >= totalPages}
+              className="border-l border-slate-600 px-3 py-2 text-slate-300 transition-colors hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-40"
+              aria-label="Proxima pagina"
+            >
+              <ChevronRight size={14} />
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   return (
-    <div className="h-[calc(100vh-1rem)] flex flex-col bg-[#050B14] p-4 xl:px-8 xl:py-6 font-sans text-slate-300 relative overflow-hidden">
+    <div className="min-h-[calc(100vh-1rem)] flex flex-col bg-[#050B14] p-4 pb-8 xl:px-8 xl:py-6 font-sans text-slate-300 relative overflow-x-hidden overflow-y-auto">
       
       {/* HEADER */}
       <header className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-5 shrink-0">
@@ -529,71 +612,6 @@ function Dashboard() {
         </div>
       </section>
 
-      {/* RECENT PROJECTS TABLE */}
-      <section className="bg-[#0a101d] rounded-3xl p-5 xl:p-6 border border-slate-800/60 shadow-2xl flex flex-col flex-1 overflow-hidden min-h-0">
-         <div className="flex justify-between items-center mb-4 shrink-0">
-            <h2 className="text-base xl:text-lg font-bold text-white">Projetos Recentes</h2>
-            <button className="text-cyan-400 text-xs font-bold hover:text-cyan-300 transition-colors">Visualizar Todos os Projetos</button>
-         </div>
-
-         <div className="flex-1 overflow-y-auto custom-scrollbar pr-2">
-            <table className="w-full text-left">
-               <thead className="sticky top-0 bg-[#0a101d] z-10">
-                  <tr className="border-b border-slate-800">
-                     <th className="pb-3 text-[10px] font-bold uppercase tracking-widest text-slate-500">Nome da Obra</th>
-                     <th className="pb-3 text-[10px] font-bold uppercase tracking-widest text-slate-500">Canal</th>
-                     <th className="pb-3 text-[10px] font-bold uppercase tracking-widest text-slate-500">Status</th>
-                     <th className="pb-3 text-[10px] font-bold uppercase tracking-widest text-slate-500 text-right">Ações</th>
-                  </tr>
-               </thead>
-               <tbody className="divide-y divide-slate-800/50">
-                  {loadingPosts ? (
-                    <tr><td colSpan="4" className="py-6 text-center text-sm text-slate-500">Aguarde, carregando informações...</td></tr>
-                  ) : posts.length === 0 ? (
-                    <tr><td colSpan="4" className="py-6 text-center text-sm text-slate-500">Nenhum projeto encontrado.</td></tr>
-                  ) : (
-                    posts.map(post => (
-                    <tr
-                      id={`post-row-${post.id}`}
-                      key={post.id}
-                      onClick={() => setSelectedPostId(post.id)}
-                      className={`hover:bg-[#111827]/50 transition-colors group cursor-pointer ${selectedPostId === post.id ? 'bg-[#111827]/60' : ''}`}
-                    >
-                       <td className="py-3 px-2">
-                          <div className="flex items-center gap-3">
-                             {post.image_url ? (
-                               <img src={post.image_url} className="w-8 h-8 rounded-md object-cover ring-1 ring-white/10" alt="" />
-                             ) : (
-                               <div className="w-8 h-8 rounded-md bg-[#111827] flex items-center justify-center ring-1 ring-slate-800">
-                                  <FileText size={14} className="text-slate-500" />
-                               </div>
-                             )}
-                             <div>
-                                <p className="text-[13px] font-bold text-white line-clamp-1">{post.title}</p>
-                                <p className="text-[9px] text-slate-500 tracking-wider">ID: #{post.id}</p>
-                             </div>
-                          </div>
-                       </td>
-                       <td className="py-3 px-2 text-[11px] font-medium text-slate-400">{post.channel}</td>
-                       <td className="py-3 px-2">
-                          <StatusBadge status={post.status} />
-                       </td>
-                       <td className="py-3 px-2 text-right relative">
-                          <button 
-                             ref={e => { if(e) menuButtonRefs.current.set(post.id, e) }}
-                             onClick={(e) => handleToggleMenu(e, post.id)}
-                             className="p-1.5 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition-colors"
-                          >
-                             <Menu size={16} />
-                          </button>
-                       </td>
-                    </tr>
-                  )))}
-               </tbody>
-            </table>
-         </div>
-      </section>
-
       {/* COMPLIANCE + CHECKLIST */}
       <section ref={complianceSectionRef} className="mt-5 grid grid-cols-1 lg:grid-cols-2 gap-4">
         <div className="bg-[#0a101d] rounded-3xl p-5 xl:p-6 border border-slate-800/60 shadow-2xl">
@@ -607,13 +625,12 @@ function Dashboard() {
             </div>
           </div>
 
-          {!selectedPost ? (
-            <p className="text-sm text-slate-500">Selecione um post na tabela para ver a trilha.</p>
-          ) : (selectedPost.approval_events || []).length === 0 ? (
-            <p className="text-sm text-slate-500">Sem eventos registrados neste post.</p>
+          {timelineEvents.length === 0 ? (
+            <p className="text-sm text-slate-500">Sem eventos registrados.</p>
           ) : (
-            <div className="space-y-3 max-h-72 overflow-y-auto pr-2 custom-scrollbar">
-              {(selectedPost.approval_events || []).map((event) => (
+            <>
+              <div className="space-y-3">
+                {paginatedEvents.map((event) => (
                 <div key={event.id} className="rounded-xl border border-slate-800 bg-[#0B1221] p-3">
                   <div className="flex items-center justify-between gap-3">
                     <p className="text-sm font-bold text-white">{formatEventAction(event.action)}</p>
@@ -622,12 +639,23 @@ function Dashboard() {
                   <p className="text-xs text-slate-400 mt-1">
                     {event.actorName || 'Sistema'} - {new Date(event.createdAt).toLocaleString('pt-BR')}
                   </p>
+                  <p className="text-[11px] text-cyan-300 mt-1">
+                    Projeto: {event.postTitle || 'Sem titulo'} {event.clientName ? `• Cliente: ${event.clientName}` : ''}
+                  </p>
                   {event.versionHash ? (
                     <p className="text-[10px] text-slate-500 mt-1 break-all">Hash: {event.versionHash}</p>
                   ) : null}
                 </div>
-              ))}
-            </div>
+                ))}
+              </div>
+              {renderPaginationControls({
+                page: eventsPage,
+                totalPages: eventsTotalPages,
+                totalItems: timelineEvents.length,
+                itemsPerPage: EVENTS_PER_PAGE,
+                onChange: setEventsPage,
+              })}
+            </>
           )}
         </div>
 
@@ -642,13 +670,12 @@ function Dashboard() {
             </div>
           </div>
 
-          {!selectedPost ? (
-            <p className="text-sm text-slate-500">Selecione um post na tabela para ver o checklist.</p>
-          ) : (selectedPost.tasks || []).length === 0 ? (
+          {checklistTasks.length === 0 ? (
             <p className="text-sm text-slate-500">Ainda nao houve comentario com itens de ajuste.</p>
           ) : (
-            <div className="space-y-2 max-h-72 overflow-y-auto pr-2 custom-scrollbar">
-              {(selectedPost.tasks || []).map((task) => (
+            <>
+              <div className="space-y-2">
+                {paginatedTasks.map((task) => (
                 <label key={task.id} className="flex items-start gap-3 rounded-xl border border-slate-800 bg-[#0B1221] p-3">
                   <input
                     type="checkbox"
@@ -659,10 +686,21 @@ function Dashboard() {
                   <div className="min-w-0">
                     <p className={`text-sm font-semibold ${task.done ? 'text-slate-500 line-through' : 'text-slate-200'}`}>{task.title}</p>
                     <p className="text-[10px] text-slate-500 mt-1">Criado em {new Date(task.createdAt).toLocaleString('pt-BR')}</p>
+                    <p className="text-[11px] text-cyan-300 mt-1">
+                      Projeto: {task.postTitle || 'Sem titulo'} {task.clientName ? `• Cliente: ${task.clientName}` : ''}
+                    </p>
                   </div>
                 </label>
-              ))}
-            </div>
+                ))}
+              </div>
+              {renderPaginationControls({
+                page: tasksPage,
+                totalPages: tasksTotalPages,
+                totalItems: checklistTasks.length,
+                itemsPerPage: TASKS_PER_PAGE,
+                onChange: setTasksPage,
+              })}
+            </>
           )}
         </div>
       </section>
@@ -786,3 +824,4 @@ function Dashboard() {
 }
 
 export default Dashboard
+
