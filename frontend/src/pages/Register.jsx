@@ -122,7 +122,7 @@ export default function Register() {
             disabled={loading || !validation.isValid}
             className="mt-2 flex w-full items-center justify-center rounded-xl border border-[#00E5FF]/35 bg-gradient-to-r from-[#00E5FF] via-[#00CCFF] to-[#00B8FF] px-4 py-3 font-semibold text-[#021220] shadow-[0_0_30px_rgba(0,229,255,0.35)] transition-all hover:from-[#7DEBFF] hover:via-[#00E5FF] hover:to-[#38bdf8] disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {loading ? 'Preparando ambiente...' : 'Criar conta gratis'}
+            {loading ? 'Preparando ambiente...' : 'Criar conta'}
           </button>
         </form>
         <p className="mt-8 text-center text-sm text-slate-400">

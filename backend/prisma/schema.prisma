@@ -6,12 +6,18 @@ datasource db {
   provider = "postgresql"
 }
 
+enum PlanTier {
+  STARTER
+  PRO
+}
+
 model Tenant {
   id           String   @id @default(uuid())
   name         String
   logoUrl      String?
   themeColor   String?  @default("#0f172a")
   customDomain String?
+  plan         PlanTier @default(STARTER)
   isPro        Boolean  @default(false)
   stripeCustomerId       String?   @unique
   stripeSubscriptionId   String?   @unique

@@ -9,15 +9,12 @@ import {
   Kanban,
   FileText,
   Users,
-  Palette,
   Sparkles,
   HelpCircle,
   Bell,
   History,
   X,
   Settings,
-  Sun,
-  Moon,
   ChevronDown,
 } from 'lucide-react'
 
@@ -26,7 +23,6 @@ const navLinks = [
   { to: '/kanban', label: 'Fluxo de Producao', icon: Kanban },
   { to: '/projects', label: 'Projetos', icon: FileText },
   { to: '/customers', label: 'Gestao de Clientes', icon: Users },
-  { to: '/settings', label: 'Minha Marca', icon: Palette },
   { to: '/copy-ai', label: 'Redator IA', icon: Sparkles },
 ]
 
@@ -43,43 +39,10 @@ function MainLayout({ children }) {
   const profileMenuRef = useRef(null)
   const refreshTimerRef = useRef(null)
   const [isProfileOpen, setIsProfileOpen] = useState(false)
-  const [isLightTheme, setIsLightTheme] = useState(() => localStorage.getItem('aprovaflow-theme') === 'light')
 
   const handleLogout = () => {
     logout()
     navigate('/login')
-  }
-
-  const handleThemeToggle = () => {
-    setIsLightTheme((prev) => {
-      const next = !prev
-      if (next) {
-        document.documentElement.classList.add('apf-light-theme')
-      } else {
-        document.documentElement.classList.remove('apf-light-theme')
-      }
-      localStorage.setItem('aprovaflow-theme', next ? 'light' : 'dark')
-      return next
-    })
-  }
-
-  const handlePlanClick = async () => {
-    if (!tenant?.isPro) {
-      navigate('/settings')
-      return
-    }
-
-    try {
-      const res = await api.post('/billing/portal-session')
-      const portalUrl = res?.data?.url
-      if (portalUrl) {
-        window.location.assign(portalUrl)
-        return
-      }
-      navigate('/settings')
-    } catch {
-      navigate('/settings')
-    }
   }
 
   const getInitial = (name) => {
@@ -149,14 +112,6 @@ function MainLayout({ children }) {
   }, [isAlertsOpen])
 
   useEffect(() => {
-    if (isLightTheme) {
-      document.documentElement.classList.add('apf-light-theme')
-    } else {
-      document.documentElement.classList.remove('apf-light-theme')
-    }
-  }, [isLightTheme])
-
-  useEffect(() => {
     if (!isProfileOpen) return undefined
     const onOutsideClick = (event) => {
       if (profileMenuRef.current?.contains(event.target)) return
@@ -223,23 +178,6 @@ function MainLayout({ children }) {
         </div>
 
         <div className="px-4 pb-6 space-y-6">
-          <div className="p-4 rounded-2xl bg-gradient-to-b from-slate-800/50 to-transparent border border-slate-700/60">
-            <p className="text-xs text-slate-400 font-medium text-center mb-3">
-              {tenant?.isPro ? 'Plano Pro ativo.' : 'Limite da conta atingido.'}
-            </p>
-            <button
-              onClick={handlePlanClick}
-              className="w-full py-2 rounded-xl text-[11px] font-extrabold uppercase tracking-wider transition-all"
-              style={{
-                backgroundImage: 'linear-gradient(to right, var(--brand-color-light), var(--brand-color))',
-                color: 'var(--brand-on)',
-                boxShadow: '0 0 16px rgba(var(--brand-rgb),0.35)',
-              }}
-            >
-              {tenant?.isPro ? 'Gerenciar plano' : 'Migrar para o Pro'}
-            </button>
-          </div>
-
           <div className="space-y-1">
             <button className="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-xs font-medium text-slate-500 hover:text-slate-300 hover:bg-slate-800/40 transition-colors">
               <HelpCircle size={16} />
@@ -329,11 +267,6 @@ function MainLayout({ children }) {
               </button>
 
               <div className="flex items-center gap-3">
-                <div className="flex flex-col text-right hidden sm:flex">
-                  <span className="text-white font-bold text-sm leading-tight">{user.name}</span>
-                  <span className="text-slate-500 text-[10px] font-bold uppercase tracking-wider">Diretor Criativo</span>
-                </div>
-
                 <div ref={profileMenuRef} className="relative">
                   <button
                     type="button"
@@ -344,7 +277,9 @@ function MainLayout({ children }) {
                       {tenant?.logoUrl ? (
                         <img src={tenant.logoUrl} alt="Avatar Logo" className="w-full h-full object-cover bg-white" />
                       ) : (
-                        <span className="text-cyan-400 font-bold">{getInitial(user.name)}</span>
+                        <span className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-cyan-500/60 bg-cyan-500/10 text-cyan-300 font-bold">
+                          {getInitial(user.name)}
+                        </span>
                       )}
                     </div>
                     <ChevronDown size={14} className={`text-slate-400 transition-transform ${isProfileOpen ? 'rotate-180' : ''}`} />
@@ -353,12 +288,11 @@ function MainLayout({ children }) {
                   {isProfileOpen ? (
                     <div className="absolute right-0 top-14 z-[90] w-72 rounded-2xl border border-cyan-900/40 bg-[#0c121c] p-3 shadow-[0_30px_90px_-30px_rgba(0,0,0,0.95)]">
                       <div className="mb-2 flex items-center gap-3 rounded-xl border border-slate-800 bg-slate-900/60 p-3">
-                        <div className="h-9 w-9 rounded-full bg-slate-800 flex items-center justify-center text-cyan-300 font-bold">
+                        <div className="h-9 w-9 rounded-full border border-cyan-500/40 bg-cyan-500/10 flex items-center justify-center text-cyan-300 font-bold">
                           {getInitial(user.name)}
                         </div>
                         <div className="min-w-0">
                           <p className="truncate text-sm font-extrabold text-white">{user.name}</p>
-                          <p className="text-xs text-slate-400">Role: {user?.role || 'OWNER'}</p>
                         </div>
                       </div>
 
@@ -376,20 +310,11 @@ function MainLayout({ children }) {
 
                       <button
                         type="button"
-                        onClick={handleThemeToggle}
-                        className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-semibold text-slate-200 transition-colors hover:bg-slate-800/70"
-                      >
-                        {isLightTheme ? <Moon size={16} /> : <Sun size={16} />}
-                        {isLightTheme ? 'Tema Escuro' : 'Tema Claro'}
-                      </button>
-
-                      <button
-                        type="button"
                         onClick={() => {
                           setIsProfileOpen(false)
                           handleLogout()
                         }}
-                        className="mt-1 flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-semibold text-orange-400 transition-colors hover:bg-orange-500/10"
+                        className="mt-1 flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-semibold text-rose-400 transition-colors hover:bg-rose-500/10"
                       >
                         <LogOut size={16} />
                         Sair

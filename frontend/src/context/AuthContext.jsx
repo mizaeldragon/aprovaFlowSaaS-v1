@@ -57,7 +57,7 @@ async function loadTenantSettings() {
 export function AuthProvider({ children }) {
   const hasToken = Boolean(localStorage.getItem('aprovaflow-token'));
   const [user, setUser] = useState(null);
-  const [tenant, setTenant] = useState({ logoUrl: null, themeColor: DEFAULT_BRAND, customDomain: '', isPro: false });
+  const [tenant, setTenant] = useState({ logoUrl: null, themeColor: DEFAULT_BRAND, customDomain: '', isPro: false, plan: 'STARTER' });
   const [loading, setLoading] = useState(hasToken);
 
   useEffect(() => {
@@ -127,7 +127,7 @@ export function AuthProvider({ children }) {
     localStorage.removeItem('aprovaflow-tenant');
     delete api.defaults.headers.common.Authorization;
     setUser(null);
-    setTenant({ logoUrl: null, themeColor: DEFAULT_BRAND, customDomain: '', isPro: false });
+    setTenant({ logoUrl: null, themeColor: DEFAULT_BRAND, customDomain: '', isPro: false, plan: 'STARTER' });
     applyBrandTheme(DEFAULT_BRAND);
   };
 
@@ -135,8 +135,12 @@ export function AuthProvider({ children }) {
     setTenant((prev) => ({ ...prev, ...newSettings }));
   };
 
+  const updateUserSettings = (newUser) => {
+    setUser((prev) => ({ ...prev, ...newUser }));
+  };
+
   return (
-    <AuthContext.Provider value={{ user, tenant, loading, login, register, logout, updateTenantSettings }}>
+    <AuthContext.Provider value={{ user, tenant, loading, login, register, logout, updateTenantSettings, updateUserSettings }}>
       {children}
     </AuthContext.Provider>
   );

@@ -9,6 +9,7 @@ import nodemailer from 'nodemailer';
 import Stripe from 'stripe';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
+import { promises as dns } from 'dns';
 import { prisma } from './prisma';
 
 dotenv.config();
@@ -31,6 +32,7 @@ const STRIPE_SECRET_KEY = String(process.env.STRIPE_SECRET_KEY || '').trim();
 const STRIPE_WEBHOOK_SECRET = String(process.env.STRIPE_WEBHOOK_SECRET || '').trim();
 const STRIPE_PRICE_PRO_MONTHLY = String(process.env.STRIPE_PRICE_PRO_MONTHLY || '').trim();
 const STRIPE_PRICE_PRO_YEARLY = String(process.env.STRIPE_PRICE_PRO_YEARLY || '').trim();
+const CUSTOM_DOMAIN_CNAME_TARGET = String(process.env.CUSTOM_DOMAIN_CNAME_TARGET || 'lb.aprovaflow.com').trim().toLowerCase();
 
 const stripe = STRIPE_SECRET_KEY
   ? new Stripe(STRIPE_SECRET_KEY, { apiVersion: '2025-08-27.basil' })
@@ -63,6 +65,17 @@ const isOriginAllowed = (origin?: string) => {
   return allowedOrigins.includes(origin);
 };
 
+type PlanTier = 'STARTER' | 'PRO';
+
+function normalizeTenantPlan(plan?: string | null, isPro?: boolean | null): PlanTier {
+  if (plan === 'PRO' || isPro) return 'PRO';
+  return 'STARTER';
+}
+
+function hasProAccess(tenant?: { plan?: string | null; isPro?: boolean | null } | null) {
+  return normalizeTenantPlan(tenant?.plan, tenant?.isPro) === 'PRO';
+}
+
 const corsOptions: cors.CorsOptions = {
   credentials: true,
   origin(origin, callback) {
@@ -70,6 +83,48 @@ const corsOptions: cors.CorsOptions = {
     return callback(new Error('Not allowed by CORS'));
   },
 };
+
+function normalizeHost(value?: string | null) {
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/\.$/, '');
+}
+
+async function verifyDomainCname(customDomain: string) {
+  const domain = normalizeHost(customDomain);
+  const expectedTarget = normalizeHost(CUSTOM_DOMAIN_CNAME_TARGET);
+
+  if (!domain) {
+    return {
+      status: 'missing',
+      expectedTarget,
+      resolvedTo: [] as string[],
+      message: 'Dominio nao informado.',
+    };
+  }
+
+  try {
+    const cnameRecords = await dns.resolveCname(domain);
+    const normalizedRecords = cnameRecords.map((record) => normalizeHost(record));
+    const isConnected = normalizedRecords.includes(expectedTarget);
+    return {
+      status: isConnected ? 'connected' : 'not_connected',
+      expectedTarget,
+      resolvedTo: normalizedRecords,
+      message: isConnected
+        ? 'DNS conectado com sucesso.'
+        : 'CNAME encontrado, mas apontando para destino diferente.',
+    };
+  } catch (error) {
+    return {
+      status: 'not_connected',
+      expectedTarget,
+      resolvedTo: [] as string[],
+      message: `Nao foi possivel resolver CNAME (${(error as Error)?.message || 'erro desconhecido'}).`,
+    };
+  }
+}
 
 const app = express();
 app.use(cors(corsOptions));
@@ -98,6 +153,7 @@ app.post('/api/billing/webhook', express.raw({ type: 'application/json' }), asyn
     }) => {
       const data: any = {
         isPro: params.isPro,
+        plan: params.isPro ? 'PRO' : 'STARTER',
         stripeCustomerId: params.customerId || null,
         stripeSubscriptionId: params.subscriptionId || null,
         stripeSubscriptionStatus: params.status || null,
@@ -467,6 +523,42 @@ app.get('/api/auth/me', async (req, res) => {
   }
 });
 
+app.patch('/api/auth/me', async (req, res) => {
+  try {
+    const payload = getTokenPayload(req);
+    if (!payload) return res.status(401).json({ error: 'Nao autorizado' });
+
+    const email = normalizeEmail(req.body?.email);
+    if (!EMAIL_REGEX.test(email)) {
+      return res.status(400).json({ error: 'Informe um e-mail valido.' });
+    }
+
+    const user = await prisma.user.findUnique({ where: { id: payload.userId } });
+    if (!user) return res.status(404).json({ error: 'Usuario nao encontrado' });
+
+    const duplicated = await prisma.user.findFirst({
+      where: {
+        email,
+        id: { not: user.id },
+      },
+      select: { id: true },
+    });
+    if (duplicated) {
+      return res.status(400).json({ error: 'Este e-mail ja esta em uso.' });
+    }
+
+    const updatedUser = await prisma.user.update({
+      where: { id: user.id },
+      data: { email },
+      select: { id: true, name: true, email: true, tenantId: true },
+    });
+
+    return res.json({ user: updatedUser });
+  } catch {
+    return res.status(500).json({ error: 'Erro ao atualizar perfil do usuario.' });
+  }
+});
+
 app.post('/api/auth/forgot-password', async (req, res) => {
   try {
     const validation = validateForgotPasswordPayload(req.body || {});
@@ -581,7 +673,9 @@ app.get('/api/tenantsSettings', async (req, res) => {
     if (!payload) return res.status(401).json({ error: 'Nao autorizado' });
 
     const tenant = await prisma.tenant.findUnique({ where: { id: payload.tenantId } });
-    res.json(tenant);
+    if (!tenant) return res.status(404).json({ error: 'Agencia nao encontrada' });
+    const plan = normalizeTenantPlan((tenant as any).plan, tenant.isPro);
+    res.json({ ...tenant, plan, isPro: plan === 'PRO' });
   } catch {
     res.status(500).json({ error: 'Erro ao buscar configuracoes da agencia' });
   }
@@ -592,16 +686,19 @@ app.patch('/api/tenantsSettings', async (req, res) => {
     const payload = getTokenPayload(req);
     if (!payload) return res.status(401).json({ error: 'Nao autorizado' });
 
-    const { logoUrl, themeColor, customDomain } = req.body;
+    const { logoUrl, themeColor, customDomain, name } = req.body;
     const tenant = await prisma.tenant.findUnique({ where: { id: payload.tenantId } });
     if (!tenant) return res.status(404).json({ error: 'Agencia nao encontrada' });
 
-    if (typeof customDomain === 'string' && customDomain.trim() && !tenant.isPro) {
+    if (typeof customDomain === 'string' && customDomain.trim() && !hasProAccess(tenant)) {
       return res.status(403).json({ error: 'Dominio personalizado disponivel apenas no plano Pro' });
     }
 
-    const data: any = { logoUrl, themeColor };
-    if (tenant.isPro && typeof customDomain === 'string') {
+    const data: any = {};
+    if (typeof logoUrl === 'string') data.logoUrl = logoUrl;
+    if (typeof themeColor === 'string') data.themeColor = themeColor;
+    if (typeof name === 'string' && name.trim()) data.name = name.trim();
+    if (hasProAccess(tenant) && typeof customDomain === 'string') {
       data.customDomain = customDomain.trim();
     }
 
@@ -610,10 +707,38 @@ app.patch('/api/tenantsSettings', async (req, res) => {
       data,
     });
     emitTenantDashboardUpdate(updated.id, 'tenant_settings_updated');
-    res.json(updated);
+    const plan = normalizeTenantPlan((updated as any).plan, updated.isPro);
+    res.json({ ...updated, plan, isPro: plan === 'PRO' });
   } catch (e) {
     console.error('ERRO NO PATCH TENANT:', e);
     res.status(500).json({ error: 'Erro ao atualizar configuracoes da agencia' });
+  }
+});
+
+app.post('/api/tenantsSettings/domain/verify', async (req, res) => {
+  try {
+    const payload = getTokenPayload(req);
+    if (!payload) return res.status(401).json({ error: 'Nao autorizado' });
+
+    const tenant = await prisma.tenant.findUnique({
+      where: { id: payload.tenantId },
+      select: { id: true, plan: true, isPro: true, customDomain: true },
+    });
+    if (!tenant) return res.status(404).json({ error: 'Agencia nao encontrada' });
+    if (!hasProAccess(tenant)) return res.status(403).json({ error: 'Dominio personalizado disponivel apenas no plano Pro' });
+
+    const rawDomain = typeof req.body?.customDomain === 'string' && req.body.customDomain.trim()
+      ? req.body.customDomain.trim()
+      : tenant.customDomain || '';
+
+    const verification = await verifyDomainCname(rawDomain);
+    return res.json({
+      domain: normalizeHost(rawDomain),
+      ...verification,
+      checkedAt: new Date().toISOString(),
+    });
+  } catch {
+    return res.status(500).json({ error: 'Erro ao verificar DNS do dominio.' });
   }
 });
 
@@ -803,7 +928,7 @@ app.get('/api/posts/:id', async (req, res) => {
         tasks: { orderBy: { createdAt: 'asc' } },
         approvalEvents: { orderBy: { createdAt: 'desc' } },
         tenant: {
-          select: { name: true, logoUrl: true, themeColor: true, customDomain: true, isPro: true },
+          select: { name: true, logoUrl: true, themeColor: true, customDomain: true, isPro: true, plan: true },
         },
       },
     });

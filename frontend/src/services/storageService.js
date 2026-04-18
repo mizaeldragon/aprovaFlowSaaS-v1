@@ -1,44 +1,32 @@
-import supabase from './supabase'
-
-const CREATIVE_ASSETS_BUCKET = 'creative-assets'
-
-function sanitizeFilename(filename) {
-  return filename
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^a-z0-9.-]/g, '-')
-    .replace(/-+/g, '-')
-}
-
-function generateUniqueFilePath(fileName) {
-  const safeName = sanitizeFilename(fileName || 'image')
-  const uniqueId = crypto.randomUUID()
-  return `${uniqueId}/${Date.now()}-${safeName}`
+function fileToDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ''));
+    reader.onerror = () => reject(new Error('Falha ao converter imagem.'));
+    reader.readAsDataURL(file);
+  });
 }
 
 export async function uploadImageToCreativeAssets(file) {
   if (!file) {
-    throw new Error('Arquivo de imagem nao informado.')
+    throw new Error('Arquivo de imagem nao informado.');
   }
 
-  const path = generateUniqueFilePath(file.name)
-
-  const { error: uploadError } = await supabase.storage
-    .from(CREATIVE_ASSETS_BUCKET)
-    .upload(path, file, { cacheControl: '3600', upsert: false })
-
-  if (uploadError) {
-    throw new Error(`Falha no upload da imagem: ${uploadError.message}`)
+  const maxSizeInMb = 5;
+  if (file.size > maxSizeInMb * 1024 * 1024) {
+    throw new Error(`Imagem muito grande. Maximo: ${maxSizeInMb}MB.`);
   }
 
-  const {
-    data: { publicUrl },
-  } = supabase.storage.from(CREATIVE_ASSETS_BUCKET).getPublicUrl(path)
-
-  if (!publicUrl) {
-    throw new Error('Nao foi possivel gerar URL publica da imagem.')
+  const allowedMimeTypes = ['image/png', 'image/jpeg', 'image/webp', 'image/gif', 'image/svg+xml'];
+  if (!allowedMimeTypes.includes(file.type)) {
+    throw new Error('Formato de imagem invalido. Use PNG, JPG, WEBP, GIF ou SVG.');
   }
 
-  return publicUrl
+  const dataUrl = await fileToDataUrl(file);
+
+  if (!dataUrl) {
+    throw new Error('Nao foi possivel processar imagem.');
+  }
+
+  return dataUrl;
 }
