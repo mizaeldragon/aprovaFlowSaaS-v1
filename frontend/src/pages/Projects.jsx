@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { io } from 'socket.io-client'
-import { ChevronLeft, ChevronRight, ExternalLink, FileText, Link2, Menu } from 'lucide-react'
+import { ChevronLeft, ChevronRight, ExternalLink, FileText, Link2, Menu, Pencil } from 'lucide-react'
 import StatusBadge from '../components/ui/StatusBadge'
 import { listPosts } from '../services/reviewService'
 
@@ -264,6 +264,13 @@ function Projects() {
             >
               <ExternalLink size={16} /> Abrir Link Magico
             </a>
+            <Link
+              to={`/create?editPostId=${selected.id}&from=projects`}
+              onClick={() => setOpenMenuPostId(null)}
+              className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-[13px] font-medium text-slate-300 transition-colors hover:bg-[#1E293B] hover:text-white"
+            >
+              <Pencil size={16} /> Editar projeto
+            </Link>
             <Link
               to={`/kanban?postId=${selected.id}`}
               onClick={() => setOpenMenuPostId(null)}

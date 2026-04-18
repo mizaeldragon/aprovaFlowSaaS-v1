@@ -951,6 +951,98 @@ app.get('/api/posts/:id/audit', async (req, res) => {
   }
 });
 
+app.patch('/api/posts/:id', async (req, res) => {
+  try {
+    const payload = getTokenPayload(req);
+    if (!payload) return res.status(401).json({ error: 'Nao autorizado' });
+
+    const post = await prisma.post.findUnique({ where: { id: req.params.id } });
+    if (!post) return res.status(404).json({ error: 'Post nao encontrado' });
+    if (post.tenantId !== payload.tenantId) {
+      return res.status(403).json({ error: 'Sem permissao para editar este projeto.' });
+    }
+
+    const title = normalizeText(req.body?.title);
+    const channel = normalizeText(req.body?.channel);
+    const caption = normalizeText(req.body?.caption);
+    const clientName = normalizeText(req.body?.clientName);
+    const incomingImageUrl = typeof req.body?.imageUrl === 'string' ? req.body.imageUrl.trim() : '';
+    const imageUrl = incomingImageUrl || post.imageUrl;
+    const actorName = normalizeText(req.body?.actorName) || 'Agency';
+
+    if (!title) return res.status(400).json({ error: 'Titulo obrigatorio.' });
+    if (!channel) return res.status(400).json({ error: 'Canal obrigatorio.' });
+    if (!caption) return res.status(400).json({ error: 'Legenda obrigatoria.' });
+    if (!clientName) return res.status(400).json({ error: 'Nome do cliente obrigatorio.' });
+    if (!imageUrl) return res.status(400).json({ error: 'Imagem obrigatoria.' });
+
+    const normalizedSlaHours = Number.isFinite(Number(req.body?.slaHours))
+      ? Math.max(1, Number(req.body.slaHours))
+      : post.slaHours || 48;
+
+    const hasContentChange =
+      post.title !== title ||
+      post.channel !== channel ||
+      String(post.caption || '') !== caption ||
+      String(post.clientName || '') !== clientName ||
+      post.imageUrl !== imageUrl ||
+      Number(post.slaHours || 48) !== normalizedSlaHours;
+
+    const nextVersion = hasContentChange ? post.version + 1 : post.version;
+    const versionHash = buildPostVersionHash({
+      title,
+      channel,
+      caption,
+      imageUrl,
+      clientName,
+      tenantId: post.tenantId,
+    });
+    const dueAt = new Date(Date.now() + normalizedSlaHours * 60 * 60 * 1000);
+
+    const updatedPost = await prisma.post.update({
+      where: { id: post.id },
+      data: {
+        title,
+        channel,
+        caption,
+        clientName,
+        imageUrl,
+        slaHours: normalizedSlaHours,
+        dueAt,
+        status: hasContentChange ? 'PENDING' : post.status,
+        version: nextVersion,
+        currentVersionHash: versionHash,
+        publishedAt: hasContentChange ? null : post.publishedAt,
+      },
+      include: {
+        comments: { orderBy: { createdAt: 'asc' } },
+        tasks: { orderBy: { createdAt: 'asc' } },
+        approvalEvents: { orderBy: { createdAt: 'desc' } },
+      },
+    });
+
+    if (hasContentChange) {
+      await prisma.approvalEvent.create({
+        data: {
+          postId: post.id,
+          actorName,
+          action: 'EDITED',
+          postVersion: nextVersion,
+          versionHash,
+          ipAddress: getClientIp(req),
+          userAgent: req.headers['user-agent'] || 'unknown',
+          meta: { source: 'api/posts/:id:edit' },
+        },
+      });
+    }
+
+    emitTenantDashboardUpdate(post.tenantId, hasContentChange ? 'post_edited' : 'post_metadata_updated');
+    return res.json(updatedPost);
+  } catch {
+    return res.status(500).json({ error: 'Erro ao editar projeto.' });
+  }
+});
+
 app.patch('/api/posts/:id/status', async (req, res) => {
   const { status, actorName } = req.body;
   const post = await prisma.post.update({
