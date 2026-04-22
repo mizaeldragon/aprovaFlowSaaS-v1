@@ -23,7 +23,7 @@ const navLinks = [
   { to: '/kanban', label: 'Fluxo de Producao', icon: Kanban },
   { to: '/projects', label: 'Projetos', icon: FileText },
   { to: '/customers', label: 'Gestao de Clientes', icon: Users },
-  { to: '/copy-ai', label: 'Redator IA', icon: Sparkles },
+  { to: '/copy-ai', label: 'Redator IA', icon: Sparkles, proOnly: true },
 ]
 
 function MainLayout({ children }) {
@@ -154,23 +154,37 @@ function MainLayout({ children }) {
           <nav className="mt-8 px-4 space-y-1.5 flex flex-col">
             {navLinks.map((link) => {
               const isActive = location.pathname.startsWith(link.to) || (link.to === '/dashboard' && location.pathname === '/')
+              const isLocked = Boolean(link.proOnly && !(tenant?.isPro || tenant?.plan === 'PRO'))
               return (
                 <NavLink
                   key={link.to}
-                  to={link.to}
+                  to={isLocked ? '/settings?tab=dados&upgrade=copy-ai' : link.to}
+                  onClick={(event) => {
+                    if (isLocked) {
+                      event.preventDefault()
+                      navigate('/settings?tab=dados&upgrade=copy-ai')
+                    }
+                  }}
                   className={() =>
                     `flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold tracking-wide transition-all duration-300 relative overflow-hidden group ${
-                      isActive
+                      isActive && !isLocked
                         ? 'text-cyan-400 bg-cyan-500/10'
-                        : 'text-slate-500 hover:text-slate-300 hover:bg-slate-800/40'
+                        : isLocked
+                          ? 'text-slate-600 bg-slate-900/30'
+                          : 'text-slate-500 hover:text-slate-300 hover:bg-slate-800/40'
                     }`
                   }
                 >
-                  {isActive && (
+                  {isActive && !isLocked ? (
                     <div className="absolute left-0 top-0 bottom-0 w-1 rounded-r-md shadow-[0_0_10px_rgba(var(--brand-rgb),0.95)]" style={{ backgroundColor: 'var(--brand-color)' }}></div>
-                  )}
-                  <link.icon size={18} className={isActive ? 'text-cyan-400' : 'text-slate-500 group-hover:text-slate-400 transition-colors'} />
-                  {link.label}
+                  ) : null}
+                  <link.icon size={18} className={isActive && !isLocked ? 'text-cyan-400' : 'text-slate-500 group-hover:text-slate-400 transition-colors'} />
+                  <span>{link.label}</span>
+                  {isLocked ? (
+                    <span className="ml-auto rounded-full border border-amber-400/40 bg-amber-400/10 px-2 py-0.5 text-[9px] font-black uppercase tracking-wider text-amber-200">
+                      Pro
+                    </span>
+                  ) : null}
                 </NavLink>
               )
             })}

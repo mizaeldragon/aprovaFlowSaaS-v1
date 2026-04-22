@@ -74,6 +74,28 @@ export default function Settings() {
     }
   }, [queryTab, setSearchParams]);
 
+  useEffect(() => {
+    const billingState = searchParams.get('billing');
+    const upgradeState = searchParams.get('upgrade');
+
+    if (billingState === 'portal') {
+      showMessage('Retorno do portal de cobranca concluido. Confira o status atualizado do plano.');
+    }
+    if (upgradeState === 'copy-ai' || upgradeState === 'pro-required') {
+      showMessage('Esse recurso exige plano Pro ativo. Finalize upgrade ou reative assinatura.', 'error');
+    }
+
+    if (!billingState && !upgradeState) return;
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.delete('billing');
+      next.delete('upgrade');
+      next.delete('redirect');
+      if (!next.get('tab')) next.set('tab', 'dados');
+      return next;
+    }, { replace: true });
+  }, [searchParams, setSearchParams]);
+
   const showMessage = (text, type = 'success') => {
     setMessageType(type);
     setMessage(text);

@@ -33,6 +33,8 @@ const STRIPE_WEBHOOK_SECRET = String(process.env.STRIPE_WEBHOOK_SECRET || '').tr
 const STRIPE_PRICE_PRO_MONTHLY = String(process.env.STRIPE_PRICE_PRO_MONTHLY || '').trim();
 const STRIPE_PRICE_PRO_YEARLY = String(process.env.STRIPE_PRICE_PRO_YEARLY || '').trim();
 const CUSTOM_DOMAIN_CNAME_TARGET = String(process.env.CUSTOM_DOMAIN_CNAME_TARGET || 'lb.aprovaflow.com').trim().toLowerCase();
+const OPS_ALERT_WEBHOOK_URL = String(process.env.OPS_ALERT_WEBHOOK_URL || '').trim();
+const BOOTED_AT = new Date();
 
 const stripe = STRIPE_SECRET_KEY
   ? new Stripe(STRIPE_SECRET_KEY, { apiVersion: '2025-08-27.basil' })
@@ -66,6 +68,67 @@ const isOriginAllowed = (origin?: string) => {
 };
 
 type PlanTier = 'STARTER' | 'PRO';
+type ErrorSeverity = 'warning' | 'error' | 'critical';
+
+function toIsoDateFromUnix(seconds?: number | null): Date | null {
+  if (!seconds || !Number.isFinite(seconds)) return null;
+  return new Date(seconds * 1000);
+}
+
+function extractErrorInfo(error: unknown) {
+  if (error instanceof Error) {
+    return {
+      message: error.message,
+      name: error.name,
+      stack: error.stack,
+    };
+  }
+  return {
+    message: String(error || 'Erro desconhecido'),
+    name: 'UnknownError',
+    stack: undefined as string | undefined,
+  };
+}
+
+async function notifyOpsWebhook(payload: Record<string, unknown>) {
+  if (!OPS_ALERT_WEBHOOK_URL) return;
+  try {
+    await fetch(OPS_ALERT_WEBHOOK_URL, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+  } catch (error) {
+    const meta = extractErrorInfo(error);
+    console.error('[ops-alert] Falha ao enviar alerta para webhook', meta.message);
+  }
+}
+
+async function reportBackendError(params: {
+  scope: string;
+  error: unknown;
+  severity?: ErrorSeverity;
+  meta?: Record<string, unknown>;
+}) {
+  const severity = params.severity || 'error';
+  const errorInfo = extractErrorInfo(params.error);
+  const payload = {
+    scope: params.scope,
+    severity,
+    message: errorInfo.message,
+    name: errorInfo.name,
+    stack: errorInfo.stack,
+    meta: params.meta || {},
+    ts: new Date().toISOString(),
+    env: NODE_ENV,
+  };
+  console.error('[backend-error]', JSON.stringify(payload));
+
+  // Alerta proativo focado em billing/webhook e falhas criticas.
+  if (severity === 'critical' || params.scope.startsWith('billing.')) {
+    await notifyOpsWebhook(payload);
+  }
+}
 
 function normalizeTenantPlan(plan?: string | null, isPro?: boolean | null): PlanTier {
   if (plan === 'PRO' || isPro) return 'PRO';
@@ -150,6 +213,7 @@ app.post('/api/billing/webhook', express.raw({ type: 'application/json' }), asyn
       subscriptionId?: string | null;
       status?: string | null;
       priceId?: string | null;
+      currentPeriodEnd?: Date | null;
     }) => {
       const data: any = {
         isPro: params.isPro,
@@ -158,7 +222,7 @@ app.post('/api/billing/webhook', express.raw({ type: 'application/json' }), asyn
         stripeSubscriptionId: params.subscriptionId || null,
         stripeSubscriptionStatus: params.status || null,
         stripePriceId: params.priceId || null,
-        stripeCurrentPeriodEnd: null,
+        stripeCurrentPeriodEnd: params.currentPeriodEnd || null,
       };
       const updated = await prisma.tenant.update({ where: { id: params.tenantId }, data });
       emitTenantDashboardUpdate(updated.id, 'billing_subscription_updated');
@@ -171,10 +235,12 @@ app.post('/api/billing/webhook', express.raw({ type: 'application/json' }), asyn
         if (tenantId) {
           let status: string | null = 'active';
           let priceId: string | null = null;
+          let currentPeriodEnd: Date | null = null;
           if (typeof session.subscription === 'string') {
             const subscription = await stripeClient.subscriptions.retrieve(session.subscription);
             status = subscription.status;
             priceId = subscription.items?.data?.[0]?.price?.id || null;
+            currentPeriodEnd = toIsoDateFromUnix(subscription.items?.data?.[0]?.current_period_end || null);
           }
 
           await markTenantSubscription({
@@ -184,6 +250,7 @@ app.post('/api/billing/webhook', express.raw({ type: 'application/json' }), asyn
             subscriptionId: typeof session.subscription === 'string' ? session.subscription : null,
             status,
             priceId,
+            currentPeriodEnd,
           });
         }
       }
@@ -202,6 +269,7 @@ app.post('/api/billing/webhook', express.raw({ type: 'application/json' }), asyn
             subscriptionId: tenantByCustomer.stripeSubscriptionId || null,
             status: 'active',
             priceId: tenantByCustomer.stripePriceId || null,
+            currentPeriodEnd: toIsoDateFromUnix(invoice.lines?.data?.[0]?.period?.end || null),
           });
         }
       }
@@ -224,12 +292,22 @@ app.post('/api/billing/webhook', express.raw({ type: 'application/json' }), asyn
           subscriptionId: subscription.id,
           status: subscription.status,
           priceId: subscription.items?.data?.[0]?.price?.id || null,
+          currentPeriodEnd: toIsoDateFromUnix(subscription.items?.data?.[0]?.current_period_end || null),
         });
       }
     }
 
     return res.json({ received: true });
   } catch (error) {
+    await reportBackendError({
+      scope: 'billing.webhook',
+      error,
+      severity: 'critical',
+      meta: {
+        contentType: req.headers['content-type'] || '',
+        stripeSignaturePresent: Boolean(req.headers['stripe-signature']),
+      },
+    });
     return res.status(400).send(`Webhook error: ${(error as Error).message}`);
   }
 });
@@ -266,6 +344,17 @@ function getTokenPayload(req: express.Request): JwtPayload | null {
   } catch {
     return null;
   }
+}
+
+async function resolveCurrentTenantFromAuth(req: express.Request) {
+  const payload = getTokenPayload(req);
+  if (!payload) return null;
+  const tenant = await prisma.tenant.findUnique({
+    where: { id: payload.tenantId },
+    select: { id: true, plan: true, isPro: true },
+  });
+  if (!tenant) return null;
+  return { payload, tenant };
 }
 
 io.use((socket, next) => {
@@ -457,6 +546,23 @@ app.get('/', (req, res) => {
   res.json({ message: 'AprovaFlow SaaS API online!' });
 });
 
+app.get('/api/ops/health', (req, res) => {
+  res.json({
+    status: 'ok',
+    env: NODE_ENV,
+    uptimeSeconds: Math.floor(process.uptime()),
+    bootedAt: BOOTED_AT.toISOString(),
+    now: new Date().toISOString(),
+    stripe: {
+      configured: Boolean(STRIPE_SECRET_KEY),
+      webhookConfigured: Boolean(STRIPE_WEBHOOK_SECRET),
+    },
+    alerting: {
+      webhookConfigured: Boolean(OPS_ALERT_WEBHOOK_URL),
+    },
+  });
+});
+
 app.post('/api/auth/register', async (req, res) => {
   try {
     const validation = validateRegisterPayload(req.body || {});
@@ -636,6 +742,12 @@ app.post('/api/auth/reset-password', async (req, res) => {
 });
 
 app.post('/api/ai/improve-copy', async (req, res) => {
+  const auth = await resolveCurrentTenantFromAuth(req);
+  if (!auth) return res.status(401).json({ error: 'Nao autorizado' });
+  if (!hasProAccess(auth.tenant)) {
+    return res.status(403).json({ error: 'Recurso disponivel apenas no plano Pro.' });
+  }
+
   const { caption, tone } = req.body;
   if (!caption) return res.status(400).json({ error: 'Texto original e obrigatorio' });
 
@@ -762,25 +874,49 @@ app.post('/api/billing/checkout-session', async (req, res) => {
       return res.status(404).json({ error: 'Agencia nao encontrada.' });
     }
 
-    let customerId = tenant.stripeCustomerId || null;
-    if (!customerId) {
+    const user = await prisma.user.findUnique({
+      where: { id: payload.userId },
+      select: { email: true, name: true },
+    });
+
+    const createAndPersistCustomer = async () => {
       const customer = await stripeClient.customers.create({
-        name: tenant.name || undefined,
+        name: tenant.name || user?.name || undefined,
+        email: user?.email || undefined,
         metadata: {
           tenantId: tenant.id,
         },
       });
-      customerId = customer.id;
       await prisma.tenant.update({
         where: { id: tenant.id },
-        data: { stripeCustomerId: customerId },
+        data: { stripeCustomerId: customer.id },
       });
+      return customer.id;
+    };
+
+    let customerId = tenant.stripeCustomerId || null;
+    if (!customerId) {
+      customerId = await createAndPersistCustomer();
     } else {
-      await stripeClient.customers.update(customerId, {
-        metadata: {
-          tenantId: tenant.id,
-        },
-      });
+      try {
+        await stripeClient.customers.update(customerId, {
+          name: tenant.name || user?.name || undefined,
+          email: user?.email || undefined,
+          metadata: {
+            tenantId: tenant.id,
+          },
+        });
+      } catch (error) {
+        const stripeCode =
+          typeof error === 'object' && error && 'code' in error
+            ? String((error as { code?: string }).code || '')
+            : '';
+        if (stripeCode === 'resource_missing') {
+          customerId = await createAndPersistCustomer();
+        } else {
+          throw error;
+        }
+      }
     }
 
     const session = await stripeClient.checkout.sessions.create({
@@ -792,8 +928,8 @@ app.post('/api/billing/checkout-session', async (req, res) => {
           quantity: 1,
         },
       ],
-      success_url: `${FRONTEND_URL}/settings?billing=success`,
-      cancel_url: `${FRONTEND_URL}/settings?billing=cancelled`,
+      success_url: `${FRONTEND_URL}/billing/success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${FRONTEND_URL}/billing/cancelled`,
       allow_promotion_codes: true,
       metadata: {
         tenantId: tenant.id,
@@ -807,6 +943,11 @@ app.post('/api/billing/checkout-session', async (req, res) => {
 
     return res.json({ url: session.url });
   } catch (error) {
+    await reportBackendError({
+      scope: 'billing.checkout_session',
+      error,
+      meta: { tenantId: getTokenPayload(req)?.tenantId || '' },
+    });
     if (error instanceof Error && error.message === 'STRIPE_NOT_CONFIGURED') {
       return res.status(500).json({ error: 'Stripe nao configurado no servidor.' });
     }
@@ -822,27 +963,114 @@ app.post('/api/billing/portal-session', async (req, res) => {
     const stripeClient = requireStripe();
     const tenant = await prisma.tenant.findUnique({
       where: { id: payload.tenantId },
-      select: { id: true, stripeCustomerId: true },
+      select: { id: true, name: true, stripeCustomerId: true },
+    });
+    const user = await prisma.user.findUnique({
+      where: { id: payload.userId },
+      select: { email: true, name: true },
     });
 
     if (!tenant) {
       return res.status(404).json({ error: 'Agencia nao encontrada.' });
     }
-    if (!tenant.stripeCustomerId) {
-      return res.status(400).json({ error: 'Cliente Stripe nao encontrado para esta agencia.' });
+
+    const createAndPersistCustomer = async () => {
+      const customer = await stripeClient.customers.create({
+        name: tenant.name || user?.name || undefined,
+        email: user?.email || undefined,
+        metadata: {
+          tenantId: tenant.id,
+        },
+      });
+      await prisma.tenant.update({
+        where: { id: tenant.id },
+        data: { stripeCustomerId: customer.id },
+      });
+      return customer.id;
+    };
+
+    let customerId = tenant.stripeCustomerId || null;
+    if (!customerId) {
+      customerId = await createAndPersistCustomer();
+    } else {
+      try {
+        await stripeClient.customers.update(customerId, {
+          name: tenant.name || user?.name || undefined,
+          email: user?.email || undefined,
+          metadata: {
+            tenantId: tenant.id,
+          },
+        });
+      } catch (error) {
+        const stripeCode =
+          typeof error === 'object' && error && 'code' in error
+            ? String((error as { code?: string }).code || '')
+            : '';
+        if (stripeCode === 'resource_missing') {
+          customerId = await createAndPersistCustomer();
+        } else {
+          throw error;
+        }
+      }
     }
 
     const portal = await stripeClient.billingPortal.sessions.create({
-      customer: tenant.stripeCustomerId,
+      customer: customerId,
       return_url: `${FRONTEND_URL}/settings?billing=portal`,
     });
 
     return res.json({ url: portal.url });
   } catch (error) {
+    await reportBackendError({
+      scope: 'billing.portal_session',
+      error,
+      meta: { tenantId: getTokenPayload(req)?.tenantId || '' },
+    });
     if (error instanceof Error && error.message === 'STRIPE_NOT_CONFIGURED') {
       return res.status(500).json({ error: 'Stripe nao configurado no servidor.' });
     }
     return res.status(500).json({ error: 'Erro ao abrir portal de cobranca.' });
+  }
+});
+
+app.get('/api/billing/status', async (req, res) => {
+  try {
+    const payload = getTokenPayload(req);
+    if (!payload) return res.status(401).json({ error: 'Nao autorizado' });
+
+    const tenant = await prisma.tenant.findUnique({
+      where: { id: payload.tenantId },
+      select: {
+        id: true,
+        plan: true,
+        isPro: true,
+        stripeCustomerId: true,
+        stripeSubscriptionId: true,
+        stripeSubscriptionStatus: true,
+        stripePriceId: true,
+        stripeCurrentPeriodEnd: true,
+      },
+    });
+    if (!tenant) return res.status(404).json({ error: 'Agencia nao encontrada.' });
+
+    const normalizedPlan = normalizeTenantPlan(tenant.plan, tenant.isPro);
+    return res.json({
+      tenantId: tenant.id,
+      plan: normalizedPlan,
+      isPro: normalizedPlan === 'PRO',
+      stripeCustomerId: tenant.stripeCustomerId,
+      stripeSubscriptionId: tenant.stripeSubscriptionId,
+      stripeSubscriptionStatus: tenant.stripeSubscriptionStatus,
+      stripePriceId: tenant.stripePriceId,
+      stripeCurrentPeriodEnd: tenant.stripeCurrentPeriodEnd,
+    });
+  } catch (error) {
+    await reportBackendError({
+      scope: 'billing.status',
+      error,
+      meta: { tenantId: getTokenPayload(req)?.tenantId || '' },
+    });
+    return res.status(500).json({ error: 'Erro ao consultar status de assinatura.' });
   }
 });
 
@@ -1283,7 +1511,27 @@ httpServer.listen(PORT, () => {
 });
 
 setInterval(() => {
-  dispatchSlaReminders().catch(() => {
-    // Mantem o processo online mesmo se houver falha pontual no job.
+  dispatchSlaReminders().catch((error) => {
+    void reportBackendError({
+      scope: 'jobs.sla_reminders',
+      error,
+      severity: 'warning',
+    });
   });
 }, 5 * 60 * 1000);
+
+process.on('unhandledRejection', (reason) => {
+  void reportBackendError({
+    scope: 'process.unhandled_rejection',
+    error: reason,
+    severity: 'critical',
+  });
+});
+
+process.on('uncaughtException', (error) => {
+  void reportBackendError({
+    scope: 'process.uncaught_exception',
+    error,
+    severity: 'critical',
+  });
+});

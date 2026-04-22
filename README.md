@@ -72,9 +72,26 @@ Configure no `backend/.env`:
 - `STRIPE_PRICE_PRO_MONTHLY`
 - `STRIPE_PRICE_PRO_YEARLY` (opcional)
 - `FRONTEND_URL`
+- `OPS_ALERT_WEBHOOK_URL` (opcional, alertas de erro backend)
 
 Endpoints:
 
 - `POST /api/billing/checkout-session`
 - `POST /api/billing/portal-session`
 - `POST /api/billing/webhook`
+- `GET /api/billing/status`
+- `GET /api/ops/health`
+
+## Checklist de deploy (ordem recomendada)
+
+1. Defina todas as variaveis de ambiente em backend/frontend (sem chaves hardcoded no codigo).
+2. Suba backend e frontend em producao com dominio e SSL ativos.
+3. Configure webhook Stripe para `POST /api/billing/webhook` e valide assinatura (`STRIPE_WEBHOOK_SECRET`).
+4. Execute pagamento real de baixo valor e confirme:
+   `checkout.session.completed` recebido e `tenant.plan/isPro` atualizado.
+5. Teste retorno em `/billing/success` e `/billing/cancelled`.
+6. Entre no portal Stripe (`/api/billing/portal-session`) e cancele/downgrade para validar bloqueio automatico de recursos Pro.
+7. Verifique monitoramento:
+   - `GET /api/ops/health` retornando `status: ok`.
+   - Alertas chegando no `OPS_ALERT_WEBHOOK_URL` em falhas de billing/webhook.
+8. Rotacione imediatamente chaves expostas anteriormente (JWT, Stripe, OpenAI, SMTP) e atualize no provedor.

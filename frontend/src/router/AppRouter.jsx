@@ -2,6 +2,7 @@ import { Route, Routes } from 'react-router-dom'
 import { AuthProvider } from '../context/AuthContext'
 import MainLayout from '../components/layout/MainLayout'
 import ProtectedRoute from '../components/ProtectedRoute'
+import ProFeatureRoute from '../components/ProFeatureRoute'
 import CreatePost from '../pages/CreatePost'
 import Dashboard from '../pages/Dashboard'
 import PublicReview from '../pages/PublicReview'
@@ -14,6 +15,7 @@ import Kanban from '../pages/Kanban'
 import Customers from '../pages/Customers'
 import CopyAI from '../pages/CopyAI'
 import Projects from '../pages/Projects'
+import BillingResult from '../pages/BillingResult'
 
 function AppRouter() {
   return (
@@ -26,6 +28,26 @@ function AppRouter() {
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="/review/:slug" element={<PublicReview />} />
+        <Route
+          path="/billing/success"
+          element={
+            <ProtectedRoute>
+              <MainLayout>
+                <BillingResult />
+              </MainLayout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/billing/cancelled"
+          element={
+            <ProtectedRoute>
+              <MainLayout>
+                <BillingResult />
+              </MainLayout>
+            </ProtectedRoute>
+          }
+        />
 
         {/* Rotas Privadas (Por Trás da Parede de Pagamento/Login) */}
         <Route
@@ -81,11 +103,11 @@ function AppRouter() {
         <Route
           path="/copy-ai"
           element={
-            <ProtectedRoute>
+            <ProFeatureRoute>
               <MainLayout>
                 <CopyAI />
               </MainLayout>
-            </ProtectedRoute>
+            </ProFeatureRoute>
           }
         />
         <Route
