@@ -458,7 +458,7 @@ function Dashboard() {
   }
 
   return (
-    <div className="min-h-[calc(100vh-1rem)] flex flex-col bg-[#050B14] p-4 pb-8 xl:px-8 xl:py-6 font-sans text-slate-300 relative overflow-x-hidden overflow-y-auto">
+    <div className="min-h-[calc(100vh-1rem)] flex flex-col bg-[#041634] p-4 pb-8 xl:px-8 xl:py-6 font-sans text-slate-300 relative overflow-x-hidden overflow-y-auto">
       
       {/* HEADER */}
       <header className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-5 shrink-0">
