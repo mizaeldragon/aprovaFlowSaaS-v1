@@ -62,9 +62,32 @@ function parseAllowedOrigins() {
 }
 
 const allowedOrigins = parseAllowedOrigins();
+const allowedOriginHosts = allowedOrigins
+  .map((origin) => {
+    try {
+      return new URL(origin).hostname.toLowerCase();
+    } catch {
+      return '';
+    }
+  })
+  .filter(Boolean);
+
 const isOriginAllowed = (origin?: string) => {
-  if (!origin) return !IS_PRODUCTION;
-  return allowedOrigins.includes(origin);
+  // Requests sem origin (health checks, backend-to-backend, curl) devem passar.
+  if (!origin) return true;
+  if (allowedOrigins.includes(origin)) return true;
+
+  try {
+    const incomingHost = new URL(origin).hostname.toLowerCase();
+    const hasVercelHostConfigured = allowedOriginHosts.some((host) => host.endsWith('.vercel.app'));
+    if (hasVercelHostConfigured && incomingHost.endsWith('.vercel.app')) {
+      return true;
+    }
+  } catch {
+    return false;
+  }
+
+  return false;
 };
 
 type PlanTier = 'STARTER' | 'PRO';
