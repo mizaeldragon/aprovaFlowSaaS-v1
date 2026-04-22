@@ -611,7 +611,15 @@ app.post('/api/auth/register', async (req, res) => {
       token,
       tenantId: tenant.id,
     });
-  } catch {
+  } catch (error) {
+    await reportBackendError({
+      scope: 'auth.register',
+      error,
+      meta: {
+        hasBody: Boolean(req.body),
+        email: normalizeEmail(req.body?.email),
+      },
+    });
     res.status(500).json({ error: 'Erro ao registrar usuario' });
   }
 });
