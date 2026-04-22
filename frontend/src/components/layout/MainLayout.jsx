@@ -144,8 +144,8 @@ function MainLayout({ children }) {
   if (!user) return <>{children}</>
 
   return (
-    <div className="flex h-screen bg-[#041634] text-slate-300 font-sans overflow-hidden selection:bg-cyan-500/30">
-      <aside className="w-64 bg-[#041634] border-r border-slate-800 flex flex-col justify-between shrink-0 h-full overflow-y-auto hidden md:flex">
+    <div className="flex h-screen bg-[#0c121c] text-slate-300 font-sans overflow-hidden selection:bg-cyan-500/30">
+      <aside className="w-64 bg-[#0c121c] border-r border-slate-800 flex flex-col justify-between shrink-0 h-full overflow-y-auto hidden md:flex">
         <div>
           <div className="h-24 flex items-center px-8 border-b border-[#1E293B]/50">
             <img src="/apv-logo.png" alt="AprovaFlow" className="h-11 w-auto object-contain" />
@@ -202,7 +202,7 @@ function MainLayout({ children }) {
       </aside>
 
       <div className="flex-1 flex flex-col h-full overflow-hidden relative">
-        <header className="h-24 flex items-center justify-between px-8 border-b border-slate-800/60 shrink-0 bg-[#041634]/90 backdrop-blur-sm z-50 w-full relative">
+        <header className="h-24 flex items-center justify-between px-8 border-b border-slate-800/60 shrink-0 bg-[#0c121c]/90 backdrop-blur-sm z-50 w-full relative">
           <div className="w-full max-w-md" />
 
           <div className="flex items-center gap-6">
@@ -239,7 +239,7 @@ function MainLayout({ children }) {
               </button>
 
               {isAlertsOpen ? (
-                <div className="absolute right-0 top-9 z-40 w-[360px] rounded-2xl border border-cyan-900/40 bg-[#041634] p-4 shadow-[0_30px_90px_-30px_rgba(0,0,0,0.95)]">
+                <div className="absolute right-0 top-9 z-40 w-[360px] rounded-2xl border border-cyan-900/40 bg-[#0c121c] p-4 shadow-[0_30px_90px_-30px_rgba(0,0,0,0.95)]">
                   <div className="mb-3 flex items-center justify-between">
                     <h3 className="text-sm font-extrabold text-white">Alertas SLA</h3>
                     <span className="text-xs text-slate-500">{loadingHeaderData ? 'Sincronizando...' : `${slaAlerts.length} alertas`}</span>
@@ -287,7 +287,7 @@ function MainLayout({ children }) {
                     onClick={() => setIsProfileOpen((prev) => !prev)}
                     className="flex items-center gap-2 rounded-full hover:scale-105 transition-transform"
                   >
-                    <div className="h-10 w-10 relative rounded-full ring-2 ring-cyan-500 ring-offset-2 ring-offset-[#041634] overflow-hidden bg-slate-800 flex items-center justify-center cursor-pointer">
+                    <div className="h-10 w-10 relative rounded-full ring-2 ring-cyan-500 ring-offset-2 ring-offset-[#0c121c] overflow-hidden bg-slate-800 flex items-center justify-center cursor-pointer">
                       {tenant?.logoUrl ? (
                         <img src={tenant.logoUrl} alt="Avatar Logo" className="w-full h-full object-cover bg-white" />
                       ) : (
@@ -300,7 +300,7 @@ function MainLayout({ children }) {
                   </button>
 
                   {isProfileOpen ? (
-                    <div className="absolute right-0 top-14 z-[90] w-72 rounded-2xl border border-cyan-900/40 bg-[#041634] p-3 shadow-[0_30px_90px_-30px_rgba(0,0,0,0.95)]">
+                    <div className="absolute right-0 top-14 z-[90] w-72 rounded-2xl border border-cyan-900/40 bg-[#0c121c] p-3 shadow-[0_30px_90px_-30px_rgba(0,0,0,0.95)]">
                       <div className="mb-2 flex items-center gap-3 rounded-xl border border-slate-800 bg-slate-900/60 p-3">
                         <div className="h-9 w-9 rounded-full border border-cyan-500/40 bg-cyan-500/10 flex items-center justify-center text-cyan-300 font-bold">
                           {getInitial(user.name)}
@@ -342,7 +342,7 @@ function MainLayout({ children }) {
         </header>
 
         <main className="z-0 flex-1 overflow-y-auto w-full relative">
-          <div className="absolute top-0 left-0 right-0 h-[500px] bg-gradient-to-b from-[#041634] to-transparent pointer-events-none opacity-70"></div>
+          <div className="absolute top-0 left-0 right-0 h-[500px] bg-gradient-to-b from-[#0c121c] to-transparent pointer-events-none opacity-60"></div>
           <div className="relative z-10 px-4 sm:px-8 py-8 w-full">
             {children}
           </div>
@@ -351,7 +351,7 @@ function MainLayout({ children }) {
 
       {isHistoryOpen ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-[2px]">
-          <div className="w-full max-w-3xl rounded-3xl border border-cyan-900/40 bg-[#041634] p-6 shadow-[0_40px_120px_-40px_rgba(0,0,0,1)]">
+          <div className="w-full max-w-3xl rounded-3xl border border-cyan-900/40 bg-[#0c121c] p-6 shadow-[0_40px_120px_-40px_rgba(0,0,0,1)]">
             <div className="mb-4 flex items-center justify-between">
               <div>
                 <h3 className="text-xl font-extrabold text-white">Historico de acoes</h3>
