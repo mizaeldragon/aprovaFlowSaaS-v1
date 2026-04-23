@@ -102,3 +102,12 @@ Payload de checkout:
    - `GET /api/ops/health` retornando `status: ok`.
    - Alertas chegando no `OPS_ALERT_WEBHOOK_URL` em falhas de billing/webhook.
 8. Rotacione imediatamente chaves expostas anteriormente (JWT, Stripe, OpenAI, SMTP) e atualize no provedor.
+
+## Kit de lancamento comercial
+
+- `docs/launch/01-plano-7-dias.md`
+- `docs/launch/02-script-prospeccao.md`
+- `docs/launch/03-roteiro-demo-15min.md`
+- `docs/launch/04-objecoes.md`
+- `docs/launch/05-faq-comercial-suporte.md`
+- `docs/launch/06-checklist-go-live.md`

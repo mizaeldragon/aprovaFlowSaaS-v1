@@ -9,6 +9,9 @@ lerna-debug.log*
 
 .env
 
+
+docs/launch/
+
 node_modules
 dist
 dist-ssr
