@@ -853,8 +853,20 @@ app.use('/api', async (req, res, next) => {
       error: 'Assinatura do plano Starter ou Pro obrigatoria para acessar este recurso.',
       code: 'BILLING_REQUIRED',
     });
-  } catch {
-    return res.status(500).json({ error: 'Erro ao validar acesso por assinatura.' });
+  } catch (error) {
+    await reportBackendError({
+      scope: 'billing.access_guard',
+      error,
+      severity: 'warning',
+      meta: {
+        path: req.path,
+        method: req.method,
+        tenantId: payload.tenantId,
+      },
+    });
+
+    // Fail-open para nao derrubar toda a API caso schema de producao ainda nao esteja sincronizado.
+    return next();
   }
 });
 
