@@ -16,7 +16,9 @@ export default function AuthPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-  const billingRequired = location.search.includes('billing=required');
+  const [showBillingRequiredNotice, setShowBillingRequiredNotice] = useState(
+    location.search.includes('billing=required')
+  );
 
   useEffect(() => {
     if (tab === 'login' && location.pathname !== '/login') {
@@ -33,7 +35,12 @@ export default function AuthPage() {
     return validateRegisterInput(form);
   }, [form, tab]);
 
+  const dismissBillingNotice = () => {
+    if (showBillingRequiredNotice) setShowBillingRequiredNotice(false);
+  };
+
   const updateField = (field, value) => {
+    dismissBillingNotice();
     setForm((prev) => ({ ...prev, [field]: value }));
     setFieldErrors((prev) => {
       if (!prev[field]) return prev;
@@ -45,6 +52,7 @@ export default function AuthPage() {
   };
 
   const switchTab = (nextTab) => {
+    dismissBillingNotice();
     setTab(nextTab);
     setError('');
     setFieldErrors({});
@@ -162,6 +170,7 @@ export default function AuthPage() {
                 required
                 className="w-full rounded-xl border border-slate-700 bg-[#050B14] px-4 py-3 text-sm text-slate-200 placeholder:text-slate-500 focus:border-[#00E5FF] focus:outline-none focus:ring-2 focus:ring-[#00E5FF]/20 transition-all"
                 value={form.agencyName}
+                onFocus={dismissBillingNotice}
                 onChange={(e) => updateField('agencyName', e.target.value)}
                 placeholder="Ex: Studio Alpha"
               />
@@ -176,6 +185,7 @@ export default function AuthPage() {
                 required
                 className="w-full rounded-xl border border-slate-700 bg-[#050B14] px-4 py-3 text-sm text-slate-200 placeholder:text-slate-500 focus:border-[#00E5FF] focus:outline-none focus:ring-2 focus:ring-[#00E5FF]/20 transition-all"
                 value={form.name}
+                onFocus={dismissBillingNotice}
                 onChange={(e) => updateField('name', e.target.value)}
                 placeholder="Seu nome"
               />
@@ -192,6 +202,7 @@ export default function AuthPage() {
               required
               className="w-full rounded-xl border border-slate-700 bg-[#050B14] px-4 py-3 text-sm text-slate-200 placeholder:text-slate-500 focus:border-[#00E5FF] focus:outline-none focus:ring-2 focus:ring-[#00E5FF]/20 transition-all"
               value={form.email}
+              onFocus={dismissBillingNotice}
               onChange={(e) => updateField('email', e.target.value)}
               placeholder="exemplo@agencia.com"
             />
@@ -208,6 +219,7 @@ export default function AuthPage() {
                 required
                 className="w-full rounded-xl border border-slate-700 bg-[#050B14] px-4 py-3 pr-12 text-sm text-slate-200 placeholder:text-slate-500 focus:border-[#00E5FF] focus:outline-none focus:ring-2 focus:ring-[#00E5FF]/20 transition-all"
                 value={form.password}
+                onFocus={dismissBillingNotice}
                 onChange={(e) => updateField('password', e.target.value)}
                 placeholder="********"
               />
@@ -232,7 +244,7 @@ export default function AuthPage() {
           )}
 
           {error ? <p className="rounded-lg border border-rose-500/30 bg-rose-500/10 p-3 text-sm text-rose-300">{error}</p> : null}
-          {billingRequired ? (
+          {showBillingRequiredNotice ? (
             <p className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-200">
               Assinatura obrigatória pendente. Finalize o checkout do Starter para acessar o SaaS.
             </p>
