@@ -16,6 +16,8 @@ export default function AuthPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const selectedPlanFromQuery = new URLSearchParams(location.search).get('plan');
+  const selectedCheckoutPlan = selectedPlanFromQuery === 'pro' ? 'pro' : 'starter';
   const [showBillingRequiredNotice, setShowBillingRequiredNotice] = useState(
     location.search.includes('billing=required')
   );
@@ -80,7 +82,10 @@ export default function AuthPage() {
           validation.normalized.agencyName
         );
         try {
-          const billingRes = await api.post('/billing/checkout-session', { plan: 'starter', interval: 'monthly' });
+          const billingRes = await api.post('/billing/checkout-session', {
+            plan: selectedCheckoutPlan,
+            interval: 'monthly',
+          });
           const checkoutUrl = billingRes?.data?.url;
           if (checkoutUrl) {
             window.location.assign(checkoutUrl);

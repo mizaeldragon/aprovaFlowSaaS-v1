@@ -83,6 +83,7 @@ Endpoints:
 - `POST /api/billing/webhook`
 - `GET /api/billing/status`
 - `GET /api/ops/health`
+- `POST /api/ops/alert-test` (dispara alerta de teste para `OPS_ALERT_WEBHOOK_URL`)
 
 Payload de checkout:
 

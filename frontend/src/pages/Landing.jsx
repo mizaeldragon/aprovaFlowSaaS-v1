@@ -93,7 +93,7 @@ const featureCards = [
   },
   {
     icon: MessageCircleMore,
-    title: 'Centralizacao total',
+    title: 'Centralização total',
     text: 'Tudo em um lugar: comentário, decisão e status final.',
   },
 ];
@@ -127,7 +127,7 @@ const testimonials = [
   {
     quote: 'Reduzimos retrabalho e agora aprovamos em minutos, não em dias.',
     author: 'Mariana Costa',
-    role: 'Diretora Criativa, Agencia Pulso',
+    role: 'Diretora Criativa, Agência Pulso',
   },
   {
     quote: 'A operação ficou profissional e os clientes perceberam o nível.',
@@ -165,9 +165,9 @@ const pricingPlans = [
     cta: 'Assinar Pro',
     items: [
       'Projetos ilimitados',
-      'White-label + dominio proprio',
-      'SLA com alertas automaticos',
-      'Trilha juridica completa',
+      'White-label + domínio próprio',
+      'SLA com alertas automáticos',
+      'Trilha jurídica completa',
       'Suporte prioritario',
     ],
   },
@@ -224,6 +224,7 @@ function FloatingDots({ amount = 24, seed = 1, className = '' }) {
 
 export default function Landing() {
   const [showHeader, setShowHeader] = useState(false);
+  const contactEmail = String(import.meta.env.VITE_CONTACT_EMAIL || 'contato@aprovaflow.com').trim();
 
   useEffect(() => {
     const onScroll = () => setShowHeader(window.scrollY > 40);
@@ -514,7 +515,7 @@ export default function Landing() {
 
         <section className="mx-auto max-w-7xl px-6 py-12 text-center">
           <h2 className="text-2xl font-black tracking-[-0.01em] text-white md:text-4xl">
-            Para <span className="text-[#00E5FF]">quem</span> e o AprovaFlow
+            Para <span className="text-[#00E5FF]">quem</span> é o AprovaFlow
           </h2>
 
           <div className="relative mt-10 hidden h-[620px] md:block">
@@ -620,18 +621,31 @@ export default function Landing() {
                   ))}
                 </ul>
 
-                <Link
-                  to="/register"
-                  className="mt-6 inline-flex w-full items-center justify-center rounded-xl px-4 py-3 text-sm font-black"
-                  style={{
-                    backgroundImage: plan.featured
-                      ? 'linear-gradient(135deg,#00E5FF 0%,#00E5FF 100%)'
-                      : 'linear-gradient(135deg,rgba(0,229,255,0.22) 0%,rgba(0,229,255,0.12) 100%)',
-                    color: plan.featured ? '#052231' : '#dff8ff',
-                  }}
-                >
-                  {plan.cta}
-                </Link>
+                {plan.name === 'Enterprise' ? (
+                  <a
+                    href={`mailto:${contactEmail}?subject=${encodeURIComponent('AprovaFlow Enterprise')}`}
+                    className="mt-6 inline-flex w-full items-center justify-center rounded-xl px-4 py-3 text-sm font-black"
+                    style={{
+                      backgroundImage: 'linear-gradient(135deg,rgba(0,229,255,0.22) 0%,rgba(0,229,255,0.12) 100%)',
+                      color: '#dff8ff',
+                    }}
+                  >
+                    {plan.cta}
+                  </a>
+                ) : (
+                  <Link
+                    to={`/register?plan=${plan.name.toLowerCase() === 'pro' ? 'pro' : 'starter'}`}
+                    className="mt-6 inline-flex w-full items-center justify-center rounded-xl px-4 py-3 text-sm font-black"
+                    style={{
+                      backgroundImage: plan.featured
+                        ? 'linear-gradient(135deg,#00E5FF 0%,#00E5FF 100%)'
+                        : 'linear-gradient(135deg,rgba(0,229,255,0.22) 0%,rgba(0,229,255,0.12) 100%)',
+                      color: plan.featured ? '#052231' : '#dff8ff',
+                    }}
+                  >
+                    {plan.cta}
+                  </Link>
+                )}
               </article>
             ))}
           </div>
@@ -646,7 +660,7 @@ export default function Landing() {
             <h2 className="text-3xl font-black leading-tight tracking-[-0.01em] text-white md:text-5xl">
               Transforme aprovação em um
               <br />
-              processo <span className="text-[#00E5FF]">escalavel.</span>
+              processo <span className="text-[#00E5FF]">escalável.</span>
             </h2>
             <p className="mx-auto mt-4 max-w-3xl text-base leading-relaxed text-[#a9bdd3] md:text-lg">
               Pare de perder tempo com retrabalho. Comece agora a profissionalizar seu fluxo de aprovação.

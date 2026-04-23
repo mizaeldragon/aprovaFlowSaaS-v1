@@ -610,6 +610,39 @@ app.get('/api/ops/health', (req, res) => {
   });
 });
 
+app.post('/api/ops/alert-test', async (req, res) => {
+  try {
+    const payload = getTokenPayload(req);
+    if (!payload) return res.status(401).json({ error: 'Nao autorizado' });
+    if (!OPS_ALERT_WEBHOOK_URL) {
+      return res.status(400).json({ error: 'OPS_ALERT_WEBHOOK_URL nao configurado.' });
+    }
+
+    const testEvent = {
+      scope: 'ops.alert_test',
+      severity: 'warning',
+      message: 'Teste manual de monitoramento',
+      ts: new Date().toISOString(),
+      env: NODE_ENV,
+      meta: {
+        tenantId: payload.tenantId,
+        userId: payload.userId,
+        source: 'manual_test_endpoint',
+      },
+    };
+
+    await notifyOpsWebhook(testEvent);
+    return res.json({ ok: true, sent: true, event: testEvent });
+  } catch (error) {
+    await reportBackendError({
+      scope: 'ops.alert_test',
+      error,
+      meta: { hasBody: Boolean(req.body) },
+    });
+    return res.status(500).json({ error: 'Falha ao enviar alerta de teste.' });
+  }
+});
+
 app.post('/api/auth/register', async (req, res) => {
   try {
     const validation = validateRegisterPayload(req.body || {});
