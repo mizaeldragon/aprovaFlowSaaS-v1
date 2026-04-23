@@ -20,14 +20,10 @@ export default function ProtectedRoute({ children }) {
   const billingBlocked = Boolean(
     tenant?.billingRequired && tenant?.canAccessApp === false
   );
-  const path = location.pathname || '';
-  const canAccessWhileBlocked =
-    path.startsWith('/settings') ||
-    path.startsWith('/billing/success') ||
-    path.startsWith('/billing/cancelled');
-
-  if (billingBlocked && !canAccessWhileBlocked) {
-    return <Navigate to="/settings?tab=dados&billing=required" replace />;
+  if (billingBlocked) {
+    const billingParam = encodeURIComponent('required');
+    const from = encodeURIComponent(location.pathname || '/dashboard');
+    return <Navigate to={`/register?billing=${billingParam}&from=${from}`} replace />;
   }
   
   return children;

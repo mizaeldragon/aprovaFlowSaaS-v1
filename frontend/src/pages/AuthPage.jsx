@@ -16,6 +16,7 @@ export default function AuthPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const billingRequired = location.search.includes('billing=required');
 
   useEffect(() => {
     if (tab === 'login' && location.pathname !== '/login') {
@@ -231,6 +232,11 @@ export default function AuthPage() {
           )}
 
           {error ? <p className="rounded-lg border border-rose-500/30 bg-rose-500/10 p-3 text-sm text-rose-300">{error}</p> : null}
+          {billingRequired ? (
+            <p className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-200">
+              Assinatura obrigatória pendente. Finalize o checkout do Starter para acessar o SaaS.
+            </p>
+          ) : null}
 
           <button
             type="submit"
