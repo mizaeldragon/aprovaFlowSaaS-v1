@@ -1,8 +1,9 @@
-import { Navigate } from 'react-router-dom';
+import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
 export default function ProtectedRoute({ children }) {
-  const { user, loading } = useAuth();
+  const { user, tenant, loading } = useAuth();
+  const location = useLocation();
   
   if (loading) {
     return (
@@ -14,6 +15,19 @@ export default function ProtectedRoute({ children }) {
   
   if (!user) {
     return <Navigate to="/login" replace />;
+  }
+
+  const billingBlocked = Boolean(
+    tenant?.billingRequired && tenant?.canAccessApp === false
+  );
+  const path = location.pathname || '';
+  const canAccessWhileBlocked =
+    path.startsWith('/settings') ||
+    path.startsWith('/billing/success') ||
+    path.startsWith('/billing/cancelled');
+
+  if (billingBlocked && !canAccessWhileBlocked) {
+    return <Navigate to="/settings?tab=dados&billing=required" replace />;
   }
   
   return children;

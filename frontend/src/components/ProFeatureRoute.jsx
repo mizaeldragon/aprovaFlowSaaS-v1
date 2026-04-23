@@ -1,9 +1,8 @@
-import { Navigate, useLocation } from 'react-router-dom';
+import { Navigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
 export default function ProFeatureRoute({ children }) {
   const { user, tenant, loading } = useAuth();
-  const location = useLocation();
 
   if (loading) {
     return (
@@ -18,8 +17,7 @@ export default function ProFeatureRoute({ children }) {
   }
 
   if (!tenant?.isPro && tenant?.plan !== 'PRO') {
-    const redirectTo = encodeURIComponent(location.pathname);
-    return <Navigate to={`/settings?tab=dados&upgrade=pro-required&redirect=${redirectTo}`} replace />;
+    return <Navigate to="/settings?tab=dados" replace />;
   }
 
   return children;

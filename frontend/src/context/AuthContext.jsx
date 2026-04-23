@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useState } from 'react';
 import api from '../services/api';
 
 const AuthContext = createContext();
-const DEFAULT_BRAND = '#22D3EE';
+const DEFAULT_BRAND = '#709BFF';
 
 function hexToRgbTuple(hex) {
   const value = String(hex || '').trim().replace('#', '');
@@ -57,7 +57,16 @@ async function loadTenantSettings() {
 export function AuthProvider({ children }) {
   const hasToken = Boolean(localStorage.getItem('aprovaflow-token'));
   const [user, setUser] = useState(null);
-  const [tenant, setTenant] = useState({ logoUrl: null, themeColor: DEFAULT_BRAND, customDomain: '', isPro: false, plan: 'STARTER' });
+  const [tenant, setTenant] = useState({
+    logoUrl: null,
+    themeColor: DEFAULT_BRAND,
+    customDomain: '',
+    isPro: false,
+    plan: 'STARTER',
+    billingRequired: false,
+    hasActiveSubscription: false,
+    canAccessApp: true,
+  });
   const [loading, setLoading] = useState(hasToken);
 
   useEffect(() => {
@@ -127,7 +136,16 @@ export function AuthProvider({ children }) {
     localStorage.removeItem('aprovaflow-tenant');
     delete api.defaults.headers.common.Authorization;
     setUser(null);
-    setTenant({ logoUrl: null, themeColor: DEFAULT_BRAND, customDomain: '', isPro: false, plan: 'STARTER' });
+    setTenant({
+      logoUrl: null,
+      themeColor: DEFAULT_BRAND,
+      customDomain: '',
+      isPro: false,
+      plan: 'STARTER',
+      billingRequired: false,
+      hasActiveSubscription: false,
+      canAccessApp: true,
+    });
     applyBrandTheme(DEFAULT_BRAND);
   };
 

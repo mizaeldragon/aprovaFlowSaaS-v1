@@ -20,9 +20,9 @@ import {
 
 const navLinks = [
   { to: '/dashboard', label: 'Painel de Controle', icon: LayoutDashboard },
-  { to: '/kanban', label: 'Fluxo de Producao', icon: Kanban },
+  { to: '/kanban', label: 'Fluxo de Produção', icon: Kanban },
   { to: '/projects', label: 'Projetos', icon: FileText },
-  { to: '/customers', label: 'Gestao de Clientes', icon: Users },
+  { to: '/customers', label: 'Gestão de Clientes', icon: Users },
   { to: '/copy-ai', label: 'Redator IA', icon: Sparkles, proOnly: true },
 ]
 
@@ -158,11 +158,10 @@ function MainLayout({ children }) {
               return (
                 <NavLink
                   key={link.to}
-                  to={isLocked ? '/settings?tab=dados&upgrade=copy-ai' : link.to}
+                  to={link.to}
                   onClick={(event) => {
                     if (isLocked) {
                       event.preventDefault()
-                      navigate('/settings?tab=dados&upgrade=copy-ai')
                     }
                   }}
                   className={() =>
@@ -170,7 +169,7 @@ function MainLayout({ children }) {
                       isActive && !isLocked
                         ? 'text-cyan-400 bg-cyan-500/10'
                         : isLocked
-                          ? 'text-slate-600 bg-slate-900/30'
+                          ? 'cursor-not-allowed text-slate-600 bg-slate-900/30'
                           : 'text-slate-500 hover:text-slate-300 hover:bg-slate-800/40'
                     }`
                   }

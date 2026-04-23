@@ -23,22 +23,22 @@ const painCards = [
   {
     icon: MessageCircleMore,
     title: 'Feedback perdido no WhatsApp',
-    text: 'Mensagens importantes se perdem entre memes e audios. Aprovacoes ficam sem registro.',
+    text: 'Mensagens importantes se perdem entre memes e áudios. Aprovações ficam sem registro.',
   },
   {
     icon: CircleDashed,
-    title: 'Audios sem contexto',
-    text: 'Cliente manda audio sem referencia visual. Equipe tenta adivinhar o ajuste.',
+    title: 'Áudios sem contexto',
+    text: 'Cliente manda áudio sem referência visual. Equipe tenta adivinhar o ajuste.',
   },
   {
     icon: Video,
     title: 'Prints confusos',
-    text: 'Screenshots recortados com setas vermelhas. Ninguem sabe qual versao esta sendo comentada.',
+    text: 'Screenshots recortados com setas vermelhas. Ninguém sabe qual versão está sendo comentada.',
   },
   {
     icon: Workflow,
-    title: 'Retrabalho por versao errada',
-    text: 'Equipe trabalha na V2 enquanto o cliente ja aprovou a V1. Resultado: horas desperdicadas.',
+    title: 'Retrabalho por versão errada',
+    text: 'Equipe trabalha na V2 enquanto o cliente já aprovou a V1. Resultado: horas desperdiçadas.',
   },
 ];
 
@@ -56,60 +56,60 @@ const steps = [
   {
     icon: ListChecks,
     title: 'Passo 3',
-    text: 'Feedback vira tarefa rastreavel automaticamente.',
+    text: 'Feedback vira tarefa rastreável automaticamente.',
   },
   {
     icon: Sparkles,
     title: 'Passo 4',
-    text: 'Time acompanha SLA, versoes e historico em tempo real.',
+    text: 'Time acompanha SLA, versões e histórico em tempo real.',
   },
 ];
 
 const featureCards = [
   {
     icon: ShieldCheck,
-    title: 'Trilha juridica',
-    text: 'Cada aprovacao gera data, hora, autor e versao aprovada.',
+    title: 'Trilha jurídica',
+    text: 'Cada aprovação gera data, hora, autor e versão aprovada.',
   },
   {
     icon: Workflow,
-    title: 'Historico de versoes',
-    text: 'V1, V2, V3 organizadas com comparacao visual clara.',
+    title: 'Histórico de versões',
+    text: 'V1, V2, V3 organizadas com comparação visual clara.',
   },
   {
     icon: FileCheck2,
-    title: 'Checklist automatico',
-    text: 'Comentarios do cliente viram tarefas operacionais.',
+    title: 'Checklist automático',
+    text: 'Comentários do cliente viram tarefas operacionais.',
   },
   {
     icon: Clock3,
     title: 'SLA com alertas',
-    text: 'Lembretes automaticos para evitar gargalo de aprovacao.',
+    text: 'Lembretes automáticos para evitar gargalo de aprovação.',
   },
   {
     icon: Wand2,
     title: 'White-label Pro real',
-    text: 'Dominio e identidade visual da agencia em toda experiencia.',
+    text: 'Domínio e identidade visual da agência em toda experiência.',
   },
   {
     icon: MessageCircleMore,
     title: 'Centralizacao total',
-    text: 'Tudo em um lugar: comentario, decisao e status final.',
+    text: 'Tudo em um lugar: comentário, decisão e status final.',
   },
 ];
 
 const metrics = [
   { value: '-70%', label: 'Retrabalho' },
-  { value: '3x', label: 'Mais rapido para aprovar' },
-  { value: '100%', label: 'Historico rastreavel' },
-  { value: '+95%', label: 'Satisfacao dos clientes' },
+  { value: '3x', label: 'Mais rápido para aprovar' },
+  { value: '100%', label: 'Histórico rastreável' },
+  { value: '+95%', label: 'Satisfação dos clientes' },
 ];
 
 const audiences = [
-  { icon: Share2, label: 'Agencias de marketing' },
+  { icon: Share2, label: 'Agências de marketing' },
   { icon: Sparkles, label: 'Social media' },
   { icon: Wand2, label: 'Designers' },
-  { icon: Video, label: 'Editoras de video' },
+  { icon: Video, label: 'Editoras de vídeo' },
   { icon: UserRoundCheck, label: 'Times criativos' },
   { icon: Star, label: 'Freelas premium' },
 ];
@@ -125,17 +125,17 @@ const audienceBubblePositions = [
 
 const testimonials = [
   {
-    quote: 'Reduzimos retrabalho e agora aprovamos em minutos, nao em dias.',
+    quote: 'Reduzimos retrabalho e agora aprovamos em minutos, não em dias.',
     author: 'Mariana Costa',
     role: 'Diretora Criativa, Agencia Pulso',
   },
   {
-    quote: 'A operacao ficou profissional e os clientes perceberam o nivel.',
+    quote: 'A operação ficou profissional e os clientes perceberam o nível.',
     author: 'Rafael Torres',
     role: 'CEO, Studio RT',
   },
   {
-    quote: 'Saiu o caos do WhatsApp, entrou processo com prova de aprovacao.',
+    quote: 'Saiu o caos do WhatsApp, entrou processo com prova de aprovação.',
     author: 'Juliana Mendes',
     role: 'Head de Marketing, Grupo Nex',
   },
@@ -144,23 +144,23 @@ const testimonials = [
 const pricingPlans = [
   {
     name: 'Starter',
-    price: 'R$ 97',
-    period: '/mes',
-    description: 'Para freelancers e pequenas operacoes.',
+    price: 'R$ 19,90',
+    period: '/mês',
+    description: 'Para freelancers e pequenas operações.',
     featured: false,
-    cta: 'Comecar Starter',
+    cta: 'Assinar Starter',
     items: [
-      'Ate 5 projetos ativos',
-      'Aprovacao por link sem login',
-      'Comentarios e checklist',
-      'Historico de versoes',
+      'Até 5 projetos ativos',
+      'Aprovação por link sem login',
+      'Comentários e checklist',
+      'Histórico de versões',
     ],
   },
   {
     name: 'Pro',
-    price: 'R$ 197',
-    period: '/mes',
-    description: 'Plano ideal para agencias em crescimento.',
+    price: 'R$ 69,90',
+    period: '/mês',
+    description: 'Plano ideal para agências em crescimento.',
     featured: true,
     cta: 'Assinar Pro',
     items: [
@@ -172,18 +172,18 @@ const pricingPlans = [
     ],
   },
   {
-    name: 'Scale',
-    price: 'R$ 397',
-    period: '/mes',
-    description: 'Para times com alto volume e operacao robusta.',
+    name: 'Enterprise',
+    price: 'Sob consulta',
+    period: '',
+    description: 'Para times com alto volume e operação robusta.',
     featured: false,
-    cta: 'Falar com vendas',
+    cta: 'Entrar em contato',
     items: [
       'Tudo do Pro',
-      'Multi-equipe e permissoes',
+      'Multi-equipe e permissões',
       'Onboarding assistido',
       'Atendimento dedicado',
-      'Roadmap e integracoes sob demanda',
+      'Roadmap e integrações sob demanda',
     ],
   },
 ];
@@ -352,7 +352,7 @@ export default function Landing() {
                 color: '#052231',
               }}
             >
-              Teste Gratis
+              Começar agora
             </Link>
           </div>
         </div>
@@ -365,7 +365,7 @@ export default function Landing() {
 
           <div className="relative z-10">
             <p className="mb-6 inline-flex items-center gap-2 rounded-full bg-[rgba(8,34,50,0.8)] px-4 py-1.5 text-xs font-bold tracking-[0.08em] text-[#7DEBFF]">
-              <span className="h-2 w-2 rounded-full bg-[#00E5FF]" /> Plataforma de aprovacao criativa
+              <span className="h-2 w-2 rounded-full bg-[#00E5FF]" /> Plataforma de aprovação criativa
             </p>
 
             <h1 className="text-3xl font-black leading-[0.96] tracking-[-0.02em] text-[#f4f9ff] md:text-4xl xl:text-[52px]">
@@ -373,13 +373,13 @@ export default function Landing() {
               <br />
               de aprovar <span className="text-[#00E5FF]">artes,</span>
               <br />
-              <span className="text-[#00E5FF]">videos e conteudos</span>
+              <span className="text-[#00E5FF]">vídeos e conteúdos</span>
               <br />
               com clientes.
             </h1>
 
             <p className="mt-4 max-w-2xl text-lg leading-relaxed text-[#9eb1c8] md:text-xl lg:text-2xl">
-              Centralize aprovacao, comentarios, ajustes, versoes e historico em um unico fluxo elegante.
+              Centralize aprovação, comentários, ajustes, versões e histórico em um único fluxo elegante.
             </p>
             <p className="mt-2 max-w-2xl text-base leading-relaxed text-[#9eb1c8]">
               Elimine o caos do WhatsApp e transforme feedback em produtividade.
@@ -395,7 +395,7 @@ export default function Landing() {
                   boxShadow: '0 20px 48px -26px rgba(0,229,255,0.92)',
                 }}
               >
-                Solicitar demonstracao
+                Solicitar demonstração
               </Link>
               <a
                 href="#como-funciona"
@@ -408,7 +408,7 @@ export default function Landing() {
 
             <div className="mt-8 flex flex-wrap items-center gap-6 text-sm text-[#7DEBFF]">
               <span className="inline-flex items-center gap-2"><Check size={14} /> Setup em 5 min</span>
-              <span className="inline-flex items-center gap-2"><Check size={14} /> Sem cartao de credito</span>
+              <span className="inline-flex items-center gap-2"><Check size={14} /> Sem cartão de crédito</span>
               <span className="inline-flex items-center gap-2"><Check size={14} /> White-label</span>
             </div>
           </div>
@@ -431,9 +431,9 @@ export default function Landing() {
 
         <section id="recursos" className="mx-auto max-w-7xl px-6 py-12 text-center">
           <h2 className="text-2xl font-black leading-tight tracking-[-0.01em] text-white md:text-4xl">
-            O caos da aprovacao criativa custa <span className="text-[#00E5FF]">tempo e dinheiro.</span>
+            O caos da aprovação criativa custa <span className="text-[#00E5FF]">tempo e dinheiro.</span>
           </h2>
-          <p className="mt-3 text-base md:text-lg text-[#9eb1c8]">Se voce trabalha com conteudo criativo, ja viveu isso:</p>
+          <p className="mt-3 text-base md:text-lg text-[#9eb1c8]">Se você trabalha com conteúdo criativo, já viveu isso:</p>
 
           <div className="mt-10 grid gap-5 md:grid-cols-2 xl:grid-cols-4">
             {painCards.map((item, index) => (
@@ -474,9 +474,9 @@ export default function Landing() {
 
         <section className="mx-auto max-w-7xl px-6 py-12 text-center">
           <h2 className="text-2xl font-black tracking-[-0.01em] text-white md:text-4xl">
-            Diferenciais que fazem a <span className="text-[#00E5FF]">diferenca</span>
+            Diferenciais que fazem a <span className="text-[#00E5FF]">diferença</span>
           </h2>
-          <p className="mt-3 text-base md:text-lg text-[#9eb1c8]">Tudo para sua agencia aprovar com previsibilidade.</p>
+          <p className="mt-3 text-base md:text-lg text-[#9eb1c8]">Tudo para sua agência aprovar com previsibilidade.</p>
 
           <div className="mt-10 grid gap-5 md:grid-cols-2 xl:grid-cols-3">
             {featureCards.map((item, index) => (
@@ -579,7 +579,7 @@ export default function Landing() {
 
         <section id="planos" className="mx-auto max-w-7xl px-6 py-12 text-center">
           <h2 className="text-2xl font-black tracking-[-0.01em] text-white md:text-4xl">
-            Planos para cada fase da sua <span className="text-[#00E5FF]">agencia</span>
+            Planos para cada fase da sua <span className="text-[#00E5FF]">agência</span>
           </h2>
           <p className="mt-3 text-base md:text-lg text-[#9eb1c8]">
             Comece simples e escale sem trocar de plataforma.
@@ -644,12 +644,12 @@ export default function Landing() {
           <FloatingDots amount={30} seed={6} />
           <div className="relative z-10 mx-auto max-w-5xl px-6">
             <h2 className="text-3xl font-black leading-tight tracking-[-0.01em] text-white md:text-5xl">
-              Transforme aprovacao em um
+              Transforme aprovação em um
               <br />
               processo <span className="text-[#00E5FF]">escalavel.</span>
             </h2>
             <p className="mx-auto mt-4 max-w-3xl text-base leading-relaxed text-[#a9bdd3] md:text-lg">
-              Pare de perder tempo com retrabalho. Comece agora a profissionalizar seu fluxo de aprovacao.
+              Pare de perder tempo com retrabalho. Comece agora a profissionalizar seu fluxo de aprovação.
             </p>
 
             <Link
@@ -661,56 +661,36 @@ export default function Landing() {
                 boxShadow: '0 20px 48px -26px rgba(26,210,236,0.92)',
               }}
             >
-              Agendar demonstracao <ArrowRight size={18} />
+              Agendar demonstração <ArrowRight size={18} />
             </Link>
           </div>
         </section>
       </main>
 
       <footer className="bg-[#0C131D] py-12">
-        <div className="mx-auto grid max-w-7xl gap-10 px-6 md:grid-cols-[1.6fr_1fr_1fr_1fr_1fr]">
+        <div className="mx-auto grid max-w-7xl gap-10 px-6 md:grid-cols-[1.8fr_1fr_1fr]">
           <div>
             <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#0a3648] text-base font-bold text-[#2ad9f5]">A</div>
-              <p className="text-2xl font-extrabold text-white">AprovaFlow</p>
+              <img src="/apv-logo.png" alt="AprovaFlow" className="h-10 w-auto md:h-12" />
             </div>
-            <p className="mt-4 max-w-sm text-lg text-[#a0acc0]">A forma profissional de aprovar conteudos criativos.</p>
+            <p className="mt-4 max-w-sm text-lg text-[#a0acc0]">A forma profissional de aprovar conteúdos criativos.</p>
           </div>
 
           <div>
-            <h4 className="text-sm font-black text-white">Produto</h4>
+            <h4 className="text-sm font-black text-white">Navegação</h4>
             <ul className="mt-4 space-y-2 text-base text-[#a0acc0]">
-              <li>Recursos</li>
-              <li>Integracoes</li>
-              <li>Changelog</li>
-              <li>Roadmap</li>
-            </ul>
-          </div>
-          <div>
-            <h4 className="text-sm font-black text-white">Recursos</h4>
-            <ul className="mt-4 space-y-2 text-base text-[#a0acc0]">
-              <li>Blog</li>
-              <li>Guias</li>
-              <li>Templates</li>
-              <li>API Docs</li>
-            </ul>
-          </div>
-          <div>
-            <h4 className="text-sm font-black text-white">Empresa</h4>
-            <ul className="mt-4 space-y-2 text-base text-[#a0acc0]">
-              <li>Precos</li>
-              <li>Contato</li>
-              <li>Sobre</li>
-              <li>Carreiras</li>
+              <li><a href="#recursos" className="hover:text-[#00E5FF]">Recursos</a></li>
+              <li><a href="#como-funciona" className="hover:text-[#00E5FF]">Como funciona</a></li>
+              <li><a href="#planos" className="hover:text-[#00E5FF]">Planos</a></li>
+              <li><a href="#depoimentos" className="hover:text-[#00E5FF]">Depoimentos</a></li>
+              <li><a href="#contato" className="hover:text-[#00E5FF]">Contato</a></li>
             </ul>
           </div>
           <div>
             <h4 className="text-sm font-black text-white">Legal</h4>
             <ul className="mt-4 space-y-2 text-base text-[#a0acc0]">
-              <li>Termos de uso</li>
-              <li>Privacidade</li>
-              <li>Cookies</li>
-              <li>LGPD</li>
+              <li><Link to="/termos" className="hover:text-[#00E5FF]">Termos de uso</Link></li>
+              <li><Link to="/privacidade" className="hover:text-[#00E5FF]">Privacidade</Link></li>
             </ul>
           </div>
         </div>
@@ -718,8 +698,8 @@ export default function Landing() {
         <div className="mx-auto mt-12 flex max-w-7xl items-center justify-between border-t border-slate-800/70 px-6 pt-8 text-sm text-[#8394ab]">
           <span>© 2026 AprovaFlow. Todos os direitos reservados.</span>
           <div className="flex gap-5">
-            <span>Termos</span>
-            <span>Privacidade</span>
+            <Link to="/termos" className="hover:text-[#00E5FF]">Termos</Link>
+            <Link to="/privacidade" className="hover:text-[#00E5FF]">Privacidade</Link>
           </div>
         </div>
       </footer>

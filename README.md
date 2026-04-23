@@ -69,6 +69,8 @@ Configure no `backend/.env`:
 
 - `STRIPE_SECRET_KEY`
 - `STRIPE_WEBHOOK_SECRET`
+- `STRIPE_PRICE_STARTER_MONTHLY`
+- `STRIPE_PRICE_STARTER_YEARLY` (opcional)
 - `STRIPE_PRICE_PRO_MONTHLY`
 - `STRIPE_PRICE_PRO_YEARLY` (opcional)
 - `FRONTEND_URL`
@@ -81,6 +83,10 @@ Endpoints:
 - `POST /api/billing/webhook`
 - `GET /api/billing/status`
 - `GET /api/ops/health`
+
+Payload de checkout:
+
+- `POST /api/billing/checkout-session` aceita `plan: "starter" | "pro"` e `interval: "monthly" | "yearly"`.
 
 ## Checklist de deploy (ordem recomendada)
 

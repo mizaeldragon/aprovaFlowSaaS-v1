@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import api from '../services/api';
 import { validateLoginInput, validateRegisterInput } from '../utils/authValidation';
 
 export default function AuthPage() {
@@ -61,6 +62,7 @@ export default function AuthPage() {
     try {
       if (tab === 'login') {
         await login(validation.normalized.email, validation.normalized.password);
+        navigate('/dashboard');
       } else {
         await register(
           validation.normalized.name,
@@ -68,8 +70,21 @@ export default function AuthPage() {
           validation.normalized.password,
           validation.normalized.agencyName
         );
+        try {
+          const billingRes = await api.post('/billing/checkout-session', { plan: 'starter', interval: 'monthly' });
+          const checkoutUrl = billingRes?.data?.url;
+          if (checkoutUrl) {
+            window.location.assign(checkoutUrl);
+            return;
+          }
+        } catch (billingErr) {
+          const checkoutError = billingErr?.response?.data?.error || 'Conta criada, mas nao foi possivel abrir checkout do Starter.';
+          setError(checkoutError);
+          navigate('/settings?tab=dados&billing=required');
+          return;
+        }
+        navigate('/dashboard');
       }
-      navigate('/dashboard');
     } catch (err) {
       const apiError = err.response?.data?.error || (tab === 'login' ? 'Erro ao realizar login.' : 'Erro ao cadastrar.');
       const normalizedError = String(apiError).toLowerCase();

@@ -16,6 +16,8 @@ import Customers from '../pages/Customers'
 import CopyAI from '../pages/CopyAI'
 import Projects from '../pages/Projects'
 import BillingResult from '../pages/BillingResult'
+import Terms from '../pages/Terms'
+import Privacy from '../pages/Privacy'
 
 function AppRouter() {
   return (
@@ -28,6 +30,8 @@ function AppRouter() {
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="/review/:slug" element={<PublicReview />} />
+        <Route path="/termos" element={<Terms />} />
+        <Route path="/privacidade" element={<Privacy />} />
         <Route
           path="/billing/success"
           element={

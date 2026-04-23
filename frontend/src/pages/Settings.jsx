@@ -7,7 +7,7 @@ import { Building2, Globe, Grid2x2, Monitor, Smartphone, UploadCloud } from 'luc
 
 const PRESET_COLORS = [
   { name: 'Ciano', hex: '#81E9FF' },
-  { name: 'Azul Ceu', hex: '#709BFF' },
+  { name: 'Azul Céu', hex: '#709BFF' },
   { name: 'Esmeralda', hex: '#10B981' },
   { name: 'Indigo', hex: '#4F46E5' },
   { name: 'Laranja', hex: '#F97316' },
@@ -31,7 +31,7 @@ function hexToRgba(hex, opacity = 1) {
     color = `0x${color.join('')}`;
     return `rgba(${[(color >> 16) & 255, (color >> 8) & 255, color & 255].join(',')},${opacity})`;
   }
-  return `rgba(129, 233, 255, ${opacity})`;
+  return `rgba(112, 155, 255, ${opacity})`;
 }
 
 export default function Settings() {
@@ -40,17 +40,22 @@ export default function Settings() {
   const queryTab = searchParams.get('tab');
   const activeTab = queryTab && TAB_IDS.includes(queryTab) ? queryTab : 'dados';
 
-  const [form, setForm] = useState({ themeColor: '#81E9FF', logoUrl: '' });
+  const [form, setForm] = useState({ themeColor: '#709BFF', logoUrl: '' });
   const [customDomain, setCustomDomain] = useState('portal.yourcompany.com');
   const [plan, setPlan] = useState('STARTER');
   const [isPro, setIsPro] = useState(false);
+  const [billingRequired, setBillingRequired] = useState(false);
+  const [hasActiveSubscription, setHasActiveSubscription] = useState(false);
   const [previewMode, setPreviewMode] = useState('mobile');
 
   const [companyForm, setCompanyForm] = useState({ companyName: '', email: '' });
 
   const [imageFile, setImageFile] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [isSaving, setIsSaving] = useState(false);
+  const [isSavingCompany, setIsSavingCompany] = useState(false);
+  const [isSavingBrand, setIsSavingBrand] = useState(false);
+  const [isSavingDomain, setIsSavingDomain] = useState(false);
+  const [isOpeningBilling, setIsOpeningBilling] = useState(false);
   const [isCheckingDomain, setIsCheckingDomain] = useState(false);
   const [message, setMessage] = useState('');
   const [messageType, setMessageType] = useState('success');
@@ -76,21 +81,18 @@ export default function Settings() {
 
   useEffect(() => {
     const billingState = searchParams.get('billing');
-    const upgradeState = searchParams.get('upgrade');
 
     if (billingState === 'portal') {
       showMessage('Retorno do portal de cobranca concluido. Confira o status atualizado do plano.');
     }
-    if (upgradeState === 'copy-ai' || upgradeState === 'pro-required') {
-      showMessage('Esse recurso exige plano Pro ativo. Finalize upgrade ou reative assinatura.', 'error');
+    if (billingState === 'required') {
+      showMessage('Ative sua assinatura para liberar o uso completo do SaaS.', 'error');
     }
 
-    if (!billingState && !upgradeState) return;
+    if (!billingState) return;
     setSearchParams((prev) => {
       const next = new URLSearchParams(prev);
       next.delete('billing');
-      next.delete('upgrade');
-      next.delete('redirect');
       if (!next.get('tab')) next.set('tab', 'dados');
       return next;
     }, { replace: true });
@@ -161,13 +163,15 @@ export default function Settings() {
       .then((tenantRes) => {
         const data = tenantRes.data || {};
         setForm({
-          themeColor: data.themeColor || '#81E9FF',
+          themeColor: data.themeColor || '#709BFF',
           logoUrl: data.logoUrl || '',
         });
         const nextPlan = data.plan || (data.isPro ? 'PRO' : 'STARTER');
         setPlan(nextPlan);
         setCustomDomain(data.customDomain || 'portal.yourcompany.com');
         setIsPro(nextPlan === 'PRO');
+        setBillingRequired(Boolean(data.billingRequired));
+        setHasActiveSubscription(Boolean(data.hasActiveSubscription));
         setDomainVerification((prev) => ({
           ...prev,
           expectedTarget: prev.expectedTarget || 'lb.aprovaflow.com',
@@ -198,7 +202,7 @@ export default function Settings() {
   };
 
   const handleRemoveLogo = async () => {
-    setIsSaving(true);
+    setIsSavingBrand(true);
     try {
       setImageFile(null);
       if (fileInputRef.current) fileInputRef.current.value = '';
@@ -209,12 +213,12 @@ export default function Settings() {
     } catch {
       showMessage('Erro ao remover logo.', 'error');
     } finally {
-      setIsSaving(false);
+      setIsSavingBrand(false);
     }
   };
 
   const handleSaveBrand = async () => {
-    setIsSaving(true);
+    setIsSavingBrand(true);
     try {
       let finalLogoUrl = form.logoUrl;
       if (imageFile) finalLogoUrl = await uploadImageToCreativeAssets(imageFile);
@@ -229,24 +233,24 @@ export default function Settings() {
     } catch (err) {
       showMessage(err?.response?.data?.error || 'Erro ao salvar identidade visual.', 'error');
     } finally {
-      setIsSaving(false);
+      setIsSavingBrand(false);
     }
   };
 
   const handleSaveCompany = async () => {
-    setIsSaving(true);
+    setIsSavingCompany(true);
     try {
       const nextName = companyForm.companyName.trim();
       const nextEmail = companyForm.email.trim().toLowerCase();
       if (!nextName) {
         showMessage('Nome da empresa obrigatorio.', 'error');
-        setIsSaving(false);
+        setIsSavingCompany(false);
         return;
       }
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
       if (!emailRegex.test(nextEmail)) {
         showMessage('Informe um e-mail valido.', 'error');
-        setIsSaving(false);
+        setIsSavingCompany(false);
         return;
       }
 
@@ -259,16 +263,16 @@ export default function Settings() {
     } catch (err) {
       showMessage(err?.response?.data?.error || 'Erro ao salvar dados da empresa.', 'error');
     } finally {
-      setIsSaving(false);
+      setIsSavingCompany(false);
     }
   };
 
   const handleSaveDomain = async () => {
-    setIsSaving(true);
+    setIsSavingDomain(true);
     try {
       if (!isPro) {
         showMessage('Dominio personalizado disponivel apenas no plano Pro.', 'error');
-        setIsSaving(false);
+        setIsSavingDomain(false);
         return;
       }
 
@@ -279,7 +283,7 @@ export default function Settings() {
     } catch (err) {
       showMessage(err?.response?.data?.error || 'Erro ao salvar dominio.', 'error');
     } finally {
-      setIsSaving(false);
+      setIsSavingDomain(false);
     }
   };
 
@@ -288,25 +292,28 @@ export default function Settings() {
     window.location.assign(url);
   };
 
-  const handleUpgradeToPro = async () => {
-    setIsSaving(true);
+  const startCheckout = async (planTarget = 'pro') => {
+    setIsOpeningBilling(true);
     try {
-      const res = await api.post('/billing/checkout-session', { interval: 'monthly' });
+      const res = await api.post('/billing/checkout-session', { interval: 'monthly', plan: planTarget });
       redirectToStripeUrl(res?.data?.url);
     } catch (err) {
-      showMessage(err?.response?.data?.error || 'Nao foi possivel iniciar checkout do plano Pro.', 'error');
-      setIsSaving(false);
+      showMessage(err?.response?.data?.error || 'Nao foi possivel iniciar checkout da assinatura.', 'error');
+      setIsOpeningBilling(false);
     }
   };
 
+  const handleUpgradeToPro = async () => startCheckout('pro');
+  const handleStartStarter = async () => startCheckout('starter');
+
   const handleManagePlan = async () => {
-    setIsSaving(true);
+    setIsOpeningBilling(true);
     try {
       const res = await api.post('/billing/portal-session');
       redirectToStripeUrl(res?.data?.url);
     } catch (err) {
       showMessage(err?.response?.data?.error || 'Nao foi possivel abrir o portal de cobranca.', 'error');
-      setIsSaving(false);
+      setIsOpeningBilling(false);
     }
   };
 
@@ -370,21 +377,53 @@ export default function Settings() {
                   <p className="mt-1 text-sm text-slate-300">
                     {isPro
                       ? 'Sua franquia de projetos reinicia no inicio de cada mes.'
-                      : 'Plano Starter ativo com recursos essenciais. Atualize para Pro para liberar tudo.'}
+                      : billingRequired && !hasActiveSubscription
+                        ? 'Assinatura obrigatoria pendente. Ative o Starter para liberar o uso completo.'
+                        : 'Plano Starter ativo com recursos essenciais. Atualize para Pro para liberar tudo.'}
                   </p>
-                  <button
-                    type="button"
-                    onClick={isPro ? handleManagePlan : handleUpgradeToPro}
-                    disabled={isSaving}
-                    className="mt-4 rounded-xl px-6 py-3 text-sm font-extrabold transition disabled:opacity-60"
-                    style={{
-                      backgroundImage: 'linear-gradient(to right, var(--brand-color-light), var(--brand-color))',
-                      color: 'var(--brand-on)',
-                      boxShadow: '0 0 16px rgba(var(--brand-rgb),0.35)',
-                    }}
-                  >
-                    {isSaving ? 'Abrindo...' : isPro ? 'Gerenciar Assinatura' : 'Ativar Plano Pro'}
-                  </button>
+                  {isPro ? (
+                    <button
+                      type="button"
+                      onClick={handleManagePlan}
+                      disabled={isOpeningBilling}
+                      className="mt-4 rounded-xl px-6 py-3 text-sm font-extrabold transition disabled:opacity-60"
+                      style={{
+                        backgroundImage: 'linear-gradient(to right, var(--brand-color-light), var(--brand-color))',
+                        color: 'var(--brand-on)',
+                        boxShadow: '0 0 16px rgba(var(--brand-rgb),0.35)',
+                      }}
+                    >
+                      {isOpeningBilling ? 'Abrindo...' : 'Gerenciar Assinatura'}
+                    </button>
+                  ) : billingRequired && !hasActiveSubscription ? (
+                    <button
+                      type="button"
+                      onClick={handleStartStarter}
+                      disabled={isOpeningBilling}
+                      className="mt-4 rounded-xl px-6 py-3 text-sm font-extrabold transition disabled:opacity-60"
+                      style={{
+                        backgroundImage: 'linear-gradient(to right, var(--brand-color-light), var(--brand-color))',
+                        color: 'var(--brand-on)',
+                        boxShadow: '0 0 16px rgba(var(--brand-rgb),0.35)',
+                      }}
+                    >
+                      {isOpeningBilling ? 'Abrindo...' : 'Ativar Plano Starter'}
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={handleUpgradeToPro}
+                      disabled={isOpeningBilling}
+                      className="mt-4 rounded-xl px-6 py-3 text-sm font-extrabold transition disabled:opacity-60"
+                      style={{
+                        backgroundImage: 'linear-gradient(to right, var(--brand-color-light), var(--brand-color))',
+                        color: 'var(--brand-on)',
+                        boxShadow: '0 0 16px rgba(var(--brand-rgb),0.35)',
+                      }}
+                    >
+                      {isOpeningBilling ? 'Abrindo...' : 'Ativar Plano Pro'}
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
@@ -414,7 +453,7 @@ export default function Settings() {
             <button
               type="button"
               onClick={handleSaveCompany}
-              disabled={isSaving}
+              disabled={isSavingCompany}
               className="rounded-xl px-6 py-3 text-sm font-extrabold transition disabled:opacity-60"
               style={{
                 backgroundImage: 'linear-gradient(to right, var(--brand-color-light), var(--brand-color))',
@@ -422,7 +461,7 @@ export default function Settings() {
                 boxShadow: '0 0 16px rgba(var(--brand-rgb),0.35)',
               }}
             >
-              {isSaving ? 'Salvando...' : 'Salvar alteracoes'}
+              {isSavingCompany ? 'Salvando...' : 'Salvar alteracoes'}
             </button>
           </div>
         ) : null}
@@ -454,7 +493,7 @@ export default function Settings() {
                         Substituir logo
                       </label>
                       {form.logoUrl ? (
-                        <button type="button" disabled={isSaving} onClick={handleRemoveLogo} className="text-xs font-bold uppercase tracking-wide text-rose-300 transition hover:text-rose-200 disabled:opacity-50">
+                        <button type="button" disabled={isSavingBrand} onClick={handleRemoveLogo} className="text-xs font-bold uppercase tracking-wide text-rose-300 transition hover:text-rose-200 disabled:opacity-50">
                           Remover logo
                         </button>
                       ) : null}
@@ -492,7 +531,7 @@ export default function Settings() {
               <button
                 type="button"
                 onClick={handleSaveBrand}
-                disabled={isSaving}
+                disabled={isSavingBrand}
                 className="min-w-52 rounded-2xl px-6 py-3 text-sm font-black uppercase tracking-wide transition hover:brightness-105 disabled:opacity-70"
                 style={{
                   backgroundImage: 'linear-gradient(to right, var(--brand-color-light), var(--brand-color))',
@@ -500,7 +539,7 @@ export default function Settings() {
                   boxShadow: '0 0 20px rgba(var(--brand-rgb),0.36)',
                 }}
               >
-                {isSaving ? 'Salvando...' : 'Salvar Perfil da Marca'}
+                {isSavingBrand ? 'Salvando...' : 'Salvar Perfil da Marca'}
               </button>
             </div>
 
@@ -604,7 +643,7 @@ export default function Settings() {
                   <button
                     type="button"
                     onClick={handleSaveDomain}
-                    disabled={isSaving}
+                    disabled={isSavingDomain}
                     className="rounded-xl px-6 py-3 text-sm font-extrabold transition disabled:opacity-60"
                     style={{
                       backgroundImage: 'linear-gradient(to right, var(--brand-color-light), var(--brand-color))',
@@ -612,7 +651,7 @@ export default function Settings() {
                       boxShadow: '0 0 16px rgba(var(--brand-rgb),0.35)',
                     }}
                   >
-                    {isSaving ? 'Salvando...' : 'Salvar dominio'}
+                    {isSavingDomain ? 'Salvando...' : 'Salvar dominio'}
                   </button>
                   <button
                     type="button"
@@ -622,7 +661,7 @@ export default function Settings() {
                   >
                     {isCheckingDomain ? 'Verificando...' : 'Verificar DNS'}
                   </button>
-                  <button type="button" onClick={handleManagePlan} disabled={isSaving} className="rounded-xl border border-cyan-700/40 bg-cyan-500/10 px-6 py-3 text-sm font-extrabold text-white transition hover:bg-cyan-500/20 disabled:opacity-60">Gerenciar assinatura</button>
+                  <button type="button" onClick={handleManagePlan} disabled={isOpeningBilling} className="rounded-xl border border-cyan-700/40 bg-cyan-500/10 px-6 py-3 text-sm font-extrabold text-white transition hover:bg-cyan-500/20 disabled:opacity-60">Gerenciar assinatura</button>
                 </div>
               </>
             ) : (
@@ -632,7 +671,7 @@ export default function Settings() {
                 <button
                   type="button"
                   onClick={handleUpgradeToPro}
-                  disabled={isSaving}
+                  disabled={isOpeningBilling}
                   className="mt-5 rounded-xl px-6 py-3 text-sm font-extrabold transition disabled:opacity-60"
                   style={{
                     backgroundImage: 'linear-gradient(to right, var(--brand-color-light), var(--brand-color))',
@@ -640,7 +679,7 @@ export default function Settings() {
                     boxShadow: '0 0 16px rgba(var(--brand-rgb),0.35)',
                   }}
                 >
-                  {isSaving ? 'Ativando...' : 'Ativar Plano Pro'}
+                  {isOpeningBilling ? 'Ativando...' : 'Ativar Plano Pro'}
                 </button>
               </div>
             )}

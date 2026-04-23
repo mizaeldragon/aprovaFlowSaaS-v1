@@ -30,6 +30,8 @@ if (IS_PRODUCTION && !frontendUrlFromEnv) {
 const FRONTEND_URL = frontendUrlFromEnv || 'http://localhost:5173';
 const STRIPE_SECRET_KEY = String(process.env.STRIPE_SECRET_KEY || '').trim();
 const STRIPE_WEBHOOK_SECRET = String(process.env.STRIPE_WEBHOOK_SECRET || '').trim();
+const STRIPE_PRICE_STARTER_MONTHLY = String(process.env.STRIPE_PRICE_STARTER_MONTHLY || '').trim();
+const STRIPE_PRICE_STARTER_YEARLY = String(process.env.STRIPE_PRICE_STARTER_YEARLY || '').trim();
 const STRIPE_PRICE_PRO_MONTHLY = String(process.env.STRIPE_PRICE_PRO_MONTHLY || '').trim();
 const STRIPE_PRICE_PRO_YEARLY = String(process.env.STRIPE_PRICE_PRO_YEARLY || '').trim();
 const CUSTOM_DOMAIN_CNAME_TARGET = String(process.env.CUSTOM_DOMAIN_CNAME_TARGET || 'lb.aprovaflow.com').trim().toLowerCase();
@@ -45,9 +47,25 @@ function requireStripe() {
   return stripe;
 }
 
-function getStripeProPriceId(interval: 'monthly' | 'yearly' = 'monthly') {
+function getStripePriceId(plan: 'starter' | 'pro', interval: 'monthly' | 'yearly' = 'monthly') {
+  if (plan === 'starter') {
+    if (interval === 'yearly' && STRIPE_PRICE_STARTER_YEARLY) return STRIPE_PRICE_STARTER_YEARLY;
+    return STRIPE_PRICE_STARTER_MONTHLY;
+  }
   if (interval === 'yearly' && STRIPE_PRICE_PRO_YEARLY) return STRIPE_PRICE_PRO_YEARLY;
   return STRIPE_PRICE_PRO_MONTHLY;
+}
+
+function resolvePlanFromPriceId(priceId?: string | null): PlanTier {
+  const normalized = String(priceId || '').trim();
+  if (!normalized) return 'STARTER';
+  if (normalized === STRIPE_PRICE_PRO_MONTHLY || normalized === STRIPE_PRICE_PRO_YEARLY) return 'PRO';
+  if (normalized === STRIPE_PRICE_STARTER_MONTHLY || normalized === STRIPE_PRICE_STARTER_YEARLY) return 'STARTER';
+  return 'STARTER';
+}
+
+function isSubscriptionActiveStatus(status?: string | null) {
+  return status === 'active' || status === 'trialing';
 }
 
 function parseAllowedOrigins() {
@@ -162,6 +180,11 @@ function hasProAccess(tenant?: { plan?: string | null; isPro?: boolean | null } 
   return normalizeTenantPlan(tenant?.plan, tenant?.isPro) === 'PRO';
 }
 
+function canTenantAccessApp(tenant?: { billingRequired?: boolean | null; stripeSubscriptionStatus?: string | null } | null) {
+  if (!tenant?.billingRequired) return true;
+  return isSubscriptionActiveStatus(tenant?.stripeSubscriptionStatus);
+}
+
 const corsOptions: cors.CorsOptions = {
   credentials: true,
   origin(origin, callback) {
@@ -231,16 +254,17 @@ app.post('/api/billing/webhook', express.raw({ type: 'application/json' }), asyn
 
     const markTenantSubscription = async (params: {
       tenantId: string;
-      isPro: boolean;
+      plan: PlanTier;
       customerId?: string | null;
       subscriptionId?: string | null;
       status?: string | null;
       priceId?: string | null;
       currentPeriodEnd?: Date | null;
     }) => {
+      const isActiveSubscription = isSubscriptionActiveStatus(params.status);
       const data: any = {
-        isPro: params.isPro,
-        plan: params.isPro ? 'PRO' : 'STARTER',
+        isPro: isActiveSubscription && params.plan === 'PRO',
+        plan: isActiveSubscription ? params.plan : 'STARTER',
         stripeCustomerId: params.customerId || null,
         stripeSubscriptionId: params.subscriptionId || null,
         stripeSubscriptionStatus: params.status || null,
@@ -268,7 +292,7 @@ app.post('/api/billing/webhook', express.raw({ type: 'application/json' }), asyn
 
           await markTenantSubscription({
             tenantId,
-            isPro: true,
+            plan: resolvePlanFromPriceId(priceId),
             customerId: typeof session.customer === 'string' ? session.customer : null,
             subscriptionId: typeof session.subscription === 'string' ? session.subscription : null,
             status,
@@ -287,7 +311,7 @@ app.post('/api/billing/webhook', express.raw({ type: 'application/json' }), asyn
         if (tenantByCustomer) {
           await markTenantSubscription({
             tenantId: tenantByCustomer.id,
-            isPro: true,
+            plan: resolvePlanFromPriceId(tenantByCustomer.stripePriceId),
             customerId,
             subscriptionId: tenantByCustomer.stripeSubscriptionId || null,
             status: 'active',
@@ -307,14 +331,14 @@ app.post('/api/billing/webhook', express.raw({ type: 'application/json' }), asyn
         tenantId = bySub?.id || '';
       }
       if (tenantId) {
-        const isPro = subscription.status === 'active' || subscription.status === 'trialing';
+        const priceId = subscription.items?.data?.[0]?.price?.id || null;
         await markTenantSubscription({
           tenantId,
-          isPro,
+          plan: resolvePlanFromPriceId(priceId),
           customerId: typeof subscription.customer === 'string' ? subscription.customer : null,
           subscriptionId: subscription.id,
           status: subscription.status,
-          priceId: subscription.items?.data?.[0]?.price?.id || null,
+          priceId,
           currentPeriodEnd: toIsoDateFromUnix(subscription.items?.data?.[0]?.current_period_end || null),
         });
       }
@@ -599,7 +623,13 @@ app.post('/api/auth/register', async (req, res) => {
 
     const passwordHash = await bcrypt.hash(password, 10);
 
-    const tenant = await prisma.tenant.create({ data: { name: agencyName } });
+    const tenant = await prisma.tenant.create({
+      data: {
+        name: agencyName,
+        themeColor: '#709BFF',
+        billingRequired: true,
+      },
+    });
     const user = await prisma.user.create({
       data: { name, email, passwordHash, tenantId: tenant.id },
     });
@@ -772,6 +802,29 @@ app.post('/api/auth/reset-password', async (req, res) => {
   }
 });
 
+app.use('/api', async (req, res, next) => {
+  const exemptPrefixes = ['/auth/', '/billing/', '/ops/health', '/tenantsSettings'];
+  if (exemptPrefixes.some((prefix) => req.path.startsWith(prefix))) return next();
+
+  const payload = getTokenPayload(req);
+  if (!payload) return next();
+
+  try {
+    const tenant = await prisma.tenant.findUnique({
+      where: { id: payload.tenantId },
+      select: { billingRequired: true, stripeSubscriptionStatus: true },
+    });
+    if (!tenant) return next();
+    if (canTenantAccessApp(tenant)) return next();
+    return res.status(402).json({
+      error: 'Assinatura do plano Starter ou Pro obrigatoria para acessar este recurso.',
+      code: 'BILLING_REQUIRED',
+    });
+  } catch {
+    return res.status(500).json({ error: 'Erro ao validar acesso por assinatura.' });
+  }
+});
+
 app.post('/api/ai/improve-copy', async (req, res) => {
   const auth = await resolveCurrentTenantFromAuth(req);
   if (!auth) return res.status(401).json({ error: 'Nao autorizado' });
@@ -818,7 +871,14 @@ app.get('/api/tenantsSettings', async (req, res) => {
     const tenant = await prisma.tenant.findUnique({ where: { id: payload.tenantId } });
     if (!tenant) return res.status(404).json({ error: 'Agencia nao encontrada' });
     const plan = normalizeTenantPlan((tenant as any).plan, tenant.isPro);
-    res.json({ ...tenant, plan, isPro: plan === 'PRO' });
+    const hasActiveSubscription = isSubscriptionActiveStatus(tenant.stripeSubscriptionStatus);
+    res.json({
+      ...tenant,
+      plan,
+      isPro: plan === 'PRO',
+      hasActiveSubscription,
+      canAccessApp: canTenantAccessApp(tenant),
+    });
   } catch {
     res.status(500).json({ error: 'Erro ao buscar configuracoes da agencia' });
   }
@@ -851,7 +911,14 @@ app.patch('/api/tenantsSettings', async (req, res) => {
     });
     emitTenantDashboardUpdate(updated.id, 'tenant_settings_updated');
     const plan = normalizeTenantPlan((updated as any).plan, updated.isPro);
-    res.json({ ...updated, plan, isPro: plan === 'PRO' });
+    const hasActiveSubscription = isSubscriptionActiveStatus(updated.stripeSubscriptionStatus);
+    res.json({
+      ...updated,
+      plan,
+      isPro: plan === 'PRO',
+      hasActiveSubscription,
+      canAccessApp: canTenantAccessApp(updated),
+    });
   } catch (e) {
     console.error('ERRO NO PATCH TENANT:', e);
     res.status(500).json({ error: 'Erro ao atualizar configuracoes da agencia' });
@@ -892,10 +959,12 @@ app.post('/api/billing/checkout-session', async (req, res) => {
 
     const stripeClient = requireStripe();
     const planInterval = String(req.body?.interval || 'monthly') === 'yearly' ? 'yearly' : 'monthly';
-    const priceId = getStripeProPriceId(planInterval);
+    const requestedPlan = String(req.body?.plan || 'pro').toLowerCase() === 'starter' ? 'starter' : 'pro';
+    const priceId = getStripePriceId(requestedPlan, planInterval);
 
     if (!priceId) {
-      return res.status(500).json({ error: 'Preco do Stripe nao configurado para o plano Pro.' });
+      const missingPlan = requestedPlan === 'starter' ? 'Starter' : 'Pro';
+      return res.status(500).json({ error: `Preco do Stripe nao configurado para o plano ${missingPlan}.` });
     }
 
     const tenant = await prisma.tenant.findUnique({
@@ -964,6 +1033,7 @@ app.post('/api/billing/checkout-session', async (req, res) => {
       allow_promotion_codes: true,
       metadata: {
         tenantId: tenant.id,
+        targetPlan: requestedPlan.toUpperCase(),
       },
       client_reference_id: tenant.id,
     });
@@ -982,7 +1052,7 @@ app.post('/api/billing/checkout-session', async (req, res) => {
     if (error instanceof Error && error.message === 'STRIPE_NOT_CONFIGURED') {
       return res.status(500).json({ error: 'Stripe nao configurado no servidor.' });
     }
-    return res.status(500).json({ error: 'Erro ao iniciar checkout do plano Pro.' });
+    return res.status(500).json({ error: 'Erro ao iniciar checkout da assinatura.' });
   }
 });
 
@@ -1080,15 +1150,20 @@ app.get('/api/billing/status', async (req, res) => {
         stripeSubscriptionStatus: true,
         stripePriceId: true,
         stripeCurrentPeriodEnd: true,
+        billingRequired: true,
       },
     });
     if (!tenant) return res.status(404).json({ error: 'Agencia nao encontrada.' });
 
     const normalizedPlan = normalizeTenantPlan(tenant.plan, tenant.isPro);
+    const hasActiveSubscription = isSubscriptionActiveStatus(tenant.stripeSubscriptionStatus);
     return res.json({
       tenantId: tenant.id,
       plan: normalizedPlan,
       isPro: normalizedPlan === 'PRO',
+      billingRequired: Boolean(tenant.billingRequired),
+      hasActiveSubscription,
+      canAccessApp: canTenantAccessApp(tenant),
       stripeCustomerId: tenant.stripeCustomerId,
       stripeSubscriptionId: tenant.stripeSubscriptionId,
       stripeSubscriptionStatus: tenant.stripeSubscriptionStatus,
