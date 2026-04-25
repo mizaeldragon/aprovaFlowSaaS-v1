@@ -60,6 +60,18 @@ export default function AuthPage() {
     setFieldErrors({});
   };
 
+  const openCheckout = async (plan = 'starter') => {
+    const billingRes = await api.post('/billing/checkout-session', {
+      plan,
+      interval: 'monthly',
+    });
+    const checkoutUrl = billingRes?.data?.url;
+    if (!checkoutUrl) {
+      throw new Error('Nao foi possivel abrir checkout.');
+    }
+    window.location.assign(checkoutUrl);
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
@@ -73,6 +85,11 @@ export default function AuthPage() {
     try {
       if (tab === 'login') {
         await login(validation.normalized.email, validation.normalized.password);
+        const billingStatus = await api.get('/billing/status');
+        if (billingStatus?.data?.billingRequired && billingStatus?.data?.canAccessApp === false) {
+          await openCheckout('starter');
+          return;
+        }
         navigate('/dashboard');
       } else {
         await register(
@@ -82,22 +99,13 @@ export default function AuthPage() {
           validation.normalized.agencyName
         );
         try {
-          const billingRes = await api.post('/billing/checkout-session', {
-            plan: selectedCheckoutPlan,
-            interval: 'monthly',
-          });
-          const checkoutUrl = billingRes?.data?.url;
-          if (checkoutUrl) {
-            window.location.assign(checkoutUrl);
-            return;
-          }
+          await openCheckout(selectedCheckoutPlan);
+          return;
         } catch (billingErr) {
           const checkoutError = billingErr?.response?.data?.error || 'Conta criada, mas nao foi possivel abrir checkout do Starter.';
           setError(checkoutError);
-          navigate('/settings?tab=dados&billing=required');
           return;
         }
-        navigate('/dashboard');
       }
     } catch (err) {
       const apiError = err.response?.data?.error || (tab === 'login' ? 'Erro ao realizar login.' : 'Erro ao cadastrar.');
@@ -114,6 +122,13 @@ export default function AuthPage() {
           setError('');
           return;
         }
+      }
+
+      if (tab === 'register' && (normalizedError.includes('email ja cadastrado') || normalizedError.includes('e-mail ja cadastrado'))) {
+        setFieldErrors((prev) => ({ ...prev, email: 'E-mail ja cadastrado.' }));
+        setTab('login');
+        setError('Este e-mail ja tem uma conta pendente ou ativa. Faca login para continuar o pagamento.');
+        return;
       }
 
       setError(apiError);
