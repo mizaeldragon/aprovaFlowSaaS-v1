@@ -2,6 +2,9 @@
   "name": "backend",
   "version": "1.0.0",
   "main": "dist/index.js",
+  "engines": {
+    "node": "22.x"
+  },
   "scripts": {
     "dev": "npx ts-node src/index.ts",
     "build": "npx tsc -p tsconfig.json",
