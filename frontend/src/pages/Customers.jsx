@@ -23,9 +23,7 @@ function Customers() {
   useEffect(() => {
     const fetchClients = async () => {
       try {
-        const tenantId = localStorage.getItem('aprovaflow-tenant')
-        const query = tenantId ? `?tenantId=${tenantId}` : ''
-        const res = await api.get(`/posts${query}`)
+        const res = await api.get('/posts')
         const posts = Array.isArray(res.data) ? res.data : []
         const clientMap = {}
 

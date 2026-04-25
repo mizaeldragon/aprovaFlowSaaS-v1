@@ -78,11 +78,9 @@ function MainLayout({ children }) {
     const rawApi = import.meta.env.VITE_API_URL || 'http://localhost:3000/api'
     const socketUrl = rawApi.replace(/\/api\/?$/, '')
     const token = localStorage.getItem('aprovaflow-token')
-    const tenantId = localStorage.getItem('aprovaflow-tenant')
     const socket = io(socketUrl, {
       transports: ['websocket'],
       auth: { token },
-      query: { tenantId },
     })
 
     const scheduleRefresh = () => {

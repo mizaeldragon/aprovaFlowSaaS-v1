@@ -12,6 +12,25 @@ import { uploadImageToCreativeAssets } from '../services/storageService'
 
 const ALLOWED_CHANNELS = ['Instagram', 'LinkedIn', 'Facebook']
 
+function uniqueTimelineEvents(events) {
+  const seen = new Set()
+  return events
+    .filter((event) => {
+      const action = String(event.action || '').toUpperCase()
+      const key = [
+        event.postId,
+        action,
+        event.postVersion || '',
+        event.versionHash || '',
+        event.actorName || '',
+      ].join(':')
+      if (seen.has(key)) return false
+      seen.add(key)
+      return true
+    })
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+}
+
 function Dashboard() {
   const [posts, setPosts] = useState([])
   
@@ -50,13 +69,15 @@ function Dashboard() {
 
   const timelineEvents = useMemo(
     () =>
-      posts.flatMap((post) =>
-        (post.approval_events || []).map((event) => ({
-          ...event,
-          postId: post.id,
-          postTitle: post.title,
-          clientName: post.clientName,
-        }))
+      uniqueTimelineEvents(
+        posts.flatMap((post) =>
+          (post.approval_events || []).map((event) => ({
+            ...event,
+            postId: post.id,
+            postTitle: post.title,
+            clientName: post.clientName,
+          }))
+        )
       ),
     [posts]
   )
@@ -117,11 +138,9 @@ function Dashboard() {
     const rawApi = import.meta.env.VITE_API_URL || 'http://localhost:3000/api'
     const socketUrl = rawApi.replace(/\/api\/?$/, '')
     const token = localStorage.getItem('aprovaflow-token')
-    const tenantId = localStorage.getItem('aprovaflow-tenant')
     const socket = io(socketUrl, {
       transports: ['websocket'],
       auth: { token },
-      query: { tenantId },
     })
 
     const requestRealtimeRefresh = () => {

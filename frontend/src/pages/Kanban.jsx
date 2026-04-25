@@ -12,9 +12,7 @@ function Kanban() {
   useEffect(() => {
     const fetchPosts = async () => {
       try {
-        const tenantId = localStorage.getItem('aprovaflow-tenant')
-        const query = tenantId ? `?tenantId=${tenantId}` : ''
-        const res = await api.get(`/posts${query}`)
+        const res = await api.get('/posts')
         setPosts(res.data)
       } catch (err) {
         console.error('Erro ao carregar obras para o Kanban:', err)

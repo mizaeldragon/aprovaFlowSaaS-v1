@@ -24,8 +24,7 @@ const mapCommentToUI = (comment) => ({
 });
 
 export async function listPosts() {
-  const tenantId = localStorage.getItem('aprovaflow-tenant');
-  const res = await api.get(`/posts?tenantId=${tenantId}`);
+  const res = await api.get('/posts');
   return res.data.map(mapPostToUI);
 }
 
@@ -51,8 +50,7 @@ export async function createPost(payload) {
   if (!payload?.clientName || !String(payload.clientName).trim()) {
     throw new Error('Nome do cliente obrigatorio');
   }
-  const tenantId = localStorage.getItem('aprovaflow-tenant');
-  const res = await api.post('/posts', { ...payload, clientName: String(payload.clientName).trim(), tenantId });
+  const res = await api.post('/posts', { ...payload, clientName: String(payload.clientName).trim() });
   return mapPostToUI(res.data);
 }
 
@@ -67,14 +65,20 @@ export async function submitPostReviewAction({ postId, authorName, comment, acti
     throw new Error('Informe seu nome para continuar.');
   }
 
-  const text = comment.trim() || action;
+  const text = String(comment || '').trim();
   const author = normalizedAuthor;
 
-  await api.post(`/posts/${postId}/comments`, { author, text, action });
-  
-  let dbStatus = 'PENDING';
-  if (action === 'approved') dbStatus = 'APPROVED';
-  if (action === 'changes_requested') dbStatus = 'ADJUSTMENT';
+  if (action === 'comment') {
+    if (!text) throw new Error('Informe um comentario para enviar.');
+    await api.post(`/posts/${postId}/comments`, { author, text, action: 'comment' });
+    return { status: null };
+  }
+
+  if (text) {
+    await api.post(`/posts/${postId}/comments`, { author, text, action: 'comment' });
+  }
+
+  const dbStatus = action === 'approved' ? 'APPROVED' : 'ADJUSTMENT';
 
   await api.patch(`/posts/${postId}/status`, { status: dbStatus, actorName: normalizedAuthor });
   return { status: action };

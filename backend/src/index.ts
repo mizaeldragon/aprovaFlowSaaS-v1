@@ -80,30 +80,11 @@ function parseAllowedOrigins() {
 }
 
 const allowedOrigins = parseAllowedOrigins();
-const allowedOriginHosts = allowedOrigins
-  .map((origin) => {
-    try {
-      return new URL(origin).hostname.toLowerCase();
-    } catch {
-      return '';
-    }
-  })
-  .filter(Boolean);
 
 const isOriginAllowed = (origin?: string) => {
   // Requests sem origin (health checks, backend-to-backend, curl) devem passar.
   if (!origin) return true;
   if (allowedOrigins.includes(origin)) return true;
-
-  try {
-    const incomingHost = new URL(origin).hostname.toLowerCase();
-    const hasVercelHostConfigured = allowedOriginHosts.some((host) => host.endsWith('.vercel.app'));
-    if (hasVercelHostConfigured && incomingHost.endsWith('.vercel.app')) {
-      return true;
-    }
-  } catch {
-    return false;
-  }
 
   return false;
 };
@@ -236,9 +217,21 @@ async function verifyDomainCname(customDomain: string) {
 }
 
 const app = express();
+app.set('trust proxy', 1);
+app.disable('x-powered-by');
+app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('Referrer-Policy', 'no-referrer');
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+  if (IS_PRODUCTION) {
+    res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+  }
+  next();
+});
 app.use(cors(corsOptions));
 
-app.post('/api/billing/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
+app.post('/api/billing/webhook', express.raw({ type: 'application/json', limit: '2mb' }), async (req, res) => {
   try {
     const stripeClient = requireStripe();
     if (!STRIPE_WEBHOOK_SECRET) {
@@ -359,7 +352,35 @@ app.post('/api/billing/webhook', express.raw({ type: 'application/json' }), asyn
   }
 });
 
-app.use(express.json());
+type RateLimitOptions = {
+  windowMs: number;
+  max: number;
+  scope: string;
+};
+
+const rateLimitBuckets = new Map<string, { count: number; resetAt: number }>();
+
+function rateLimit(options: RateLimitOptions) {
+  return (req: express.Request, res: express.Response, next: express.NextFunction) => {
+    const now = Date.now();
+    const key = `${options.scope}:${getClientIp(req)}`;
+    const current = rateLimitBuckets.get(key);
+
+    if (!current || current.resetAt <= now) {
+      rateLimitBuckets.set(key, { count: 1, resetAt: now + options.windowMs });
+      return next();
+    }
+
+    current.count += 1;
+    if (current.count > options.max) {
+      return res.status(429).json({ error: 'Muitas tentativas. Aguarde alguns minutos e tente novamente.' });
+    }
+
+    return next();
+  };
+}
+
+app.use(express.json({ limit: '8mb' }));
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
   cors: {
@@ -393,6 +414,15 @@ function getTokenPayload(req: express.Request): JwtPayload | null {
   }
 }
 
+function requireAuthPayload(req: express.Request, res: express.Response): JwtPayload | null {
+  const payload = getTokenPayload(req);
+  if (!payload) {
+    res.status(401).json({ error: 'Nao autorizado' });
+    return null;
+  }
+  return payload;
+}
+
 async function resolveCurrentTenantFromAuth(req: express.Request) {
   const payload = getTokenPayload(req);
   if (!payload) return null;
@@ -410,7 +440,6 @@ io.use((socket, next) => {
     const bearerToken = typeof authToken === 'string' && authToken.startsWith('Bearer ')
       ? authToken.slice(7)
       : authToken;
-    const queryTenantId = String(socket.handshake.query.tenantId || '');
 
     if (bearerToken) {
       const payload = jwt.verify(bearerToken, JWT_SECRET) as JwtPayload;
@@ -418,19 +447,14 @@ io.use((socket, next) => {
       return next();
     }
 
-    if (queryTenantId) {
-      socket.data.tenantId = queryTenantId;
-      return next();
-    }
-
-    return next();
+    return next(new Error('socket auth required'));
   } catch {
     return next(new Error('socket auth failed'));
   }
 });
 
 io.on('connection', (socket) => {
-  const tenantId = String(socket.data?.tenantId || socket.handshake.query.tenantId || '');
+  const tenantId = String(socket.data?.tenantId || '');
   if (tenantId) {
     socket.join(`tenant:${tenantId}`);
   }
@@ -588,6 +612,13 @@ function extractChecklistItems(text: string): string[] {
   }
   return Array.from(dedup).slice(0, 10);
 }
+
+app.use('/api/auth/register', rateLimit({ scope: 'auth.register', windowMs: 15 * 60 * 1000, max: 10 }));
+app.use('/api/auth/login', rateLimit({ scope: 'auth.login', windowMs: 15 * 60 * 1000, max: 20 }));
+app.use('/api/auth/forgot-password', rateLimit({ scope: 'auth.forgot_password', windowMs: 60 * 60 * 1000, max: 5 }));
+app.use('/api/auth/reset-password', rateLimit({ scope: 'auth.reset_password', windowMs: 60 * 60 * 1000, max: 10 }));
+app.use('/api/posts/:id/comments', rateLimit({ scope: 'public.comments', windowMs: 10 * 60 * 1000, max: 30 }));
+app.use('/api/posts/:id/status', rateLimit({ scope: 'public.status', windowMs: 10 * 60 * 1000, max: 30 }));
 
 app.get('/', (req, res) => {
   res.json({ message: 'AprovaFlow SaaS API online!' });
@@ -857,7 +888,7 @@ app.use('/api', async (req, res, next) => {
     await reportBackendError({
       scope: 'billing.access_guard',
       error,
-      severity: 'warning',
+      severity: 'error',
       meta: {
         path: req.path,
         method: req.method,
@@ -865,8 +896,7 @@ app.use('/api', async (req, res, next) => {
       },
     });
 
-    // Fail-open para nao derrubar toda a API caso schema de producao ainda nao esteja sincronizado.
-    return next();
+    return res.status(500).json({ error: 'Erro ao validar acesso por assinatura.' });
   }
 });
 
@@ -1226,22 +1256,11 @@ app.get('/api/billing/status', async (req, res) => {
 });
 
 app.get('/api/posts', async (req, res) => {
-  let tenantId = String(req.query.tenantId || '');
-
-  if (!tenantId) {
-    const payload = getTokenPayload(req);
-    tenantId = payload?.tenantId || '';
-  }
-
-  if (!tenantId) return res.status(400).json({ error: 'tenantId obrigatorio' });
-
-  const exists = await prisma.tenant.findUnique({ where: { id: tenantId } });
-  if (!exists) {
-    await prisma.tenant.create({ data: { id: tenantId, name: 'Agencia Teste (MVP)' } });
-  }
+  const payload = requireAuthPayload(req, res);
+  if (!payload) return;
 
   const posts = await prisma.post.findMany({
-    where: { tenantId },
+    where: { tenantId: payload.tenantId },
     orderBy: { createdAt: 'desc' },
     include: {
       comments: { orderBy: { createdAt: 'asc' } },
@@ -1253,24 +1272,29 @@ app.get('/api/posts', async (req, res) => {
 });
 
 app.post('/api/posts', async (req, res) => {
-  const { title, channel, caption, imageUrl, tenantId, clientName, slaHours } = req.body;
-  if (!tenantId) return res.status(400).json({ error: 'tenantId obrigatorio' });
+  const payload = requireAuthPayload(req, res);
+  if (!payload) return;
+
+  const { title, channel, caption, imageUrl, clientName, slaHours } = req.body;
   if (!clientName || !String(clientName).trim()) {
     return res.status(400).json({ error: 'Nome do cliente obrigatorio' });
   }
+  if (!normalizeText(title)) return res.status(400).json({ error: 'Titulo obrigatorio.' });
+  if (!normalizeText(channel)) return res.status(400).json({ error: 'Canal obrigatorio.' });
+  if (!normalizeText(imageUrl)) return res.status(400).json({ error: 'Imagem obrigatoria.' });
 
   const normalizedSlaHours = Number.isFinite(Number(slaHours)) ? Math.max(1, Number(slaHours)) : 48;
   const dueAt = new Date(Date.now() + normalizedSlaHours * 60 * 60 * 1000);
-  const versionHash = buildPostVersionHash({ title, channel, caption, imageUrl, clientName, tenantId });
+  const versionHash = buildPostVersionHash({ title, channel, caption, imageUrl, clientName, tenantId: payload.tenantId });
 
   const post = await prisma.post.create({
     data: {
-      title,
-      channel,
-      caption,
-      imageUrl,
+      title: normalizeText(title),
+      channel: normalizeText(channel),
+      caption: normalizeText(caption),
+      imageUrl: normalizeText(imageUrl),
       clientName: String(clientName).trim(),
-      tenantId,
+      tenantId: payload.tenantId,
       slaHours: normalizedSlaHours,
       dueAt,
       version: 1,
@@ -1320,6 +1344,18 @@ app.get('/api/posts/:id', async (req, res) => {
 
 app.get('/api/posts/:id/audit', async (req, res) => {
   try {
+    const payload = requireAuthPayload(req, res);
+    if (!payload) return;
+
+    const post = await prisma.post.findUnique({
+      where: { id: req.params.id },
+      select: { tenantId: true },
+    });
+    if (!post) return res.status(404).json({ error: 'Post nao encontrado' });
+    if (post.tenantId !== payload.tenantId) {
+      return res.status(403).json({ error: 'Sem permissao para acessar esta trilha.' });
+    }
+
     const events = await prisma.approvalEvent.findMany({
       where: { postId: req.params.id },
       orderBy: { createdAt: 'desc' },
@@ -1423,32 +1459,58 @@ app.patch('/api/posts/:id', async (req, res) => {
 });
 
 app.patch('/api/posts/:id/status', async (req, res) => {
-  const { status, actorName } = req.body;
-  const post = await prisma.post.update({
-    where: { id: req.params.id },
-    data: { status },
-  });
+  try {
+    const { status, actorName } = req.body;
+    const normalizedStatus = String(status || '').trim().toUpperCase();
+    if (!['PENDING', 'APPROVED', 'ADJUSTMENT'].includes(normalizedStatus)) {
+      return res.status(400).json({ error: 'Status invalido.' });
+    }
 
-  await prisma.approvalEvent.create({
-    data: {
-      postId: post.id,
-      actorName: String(actorName || 'Agency'),
-      action: status,
-      postVersion: post.version,
-      versionHash: post.currentVersionHash,
-      ipAddress: getClientIp(req),
-      userAgent: req.headers['user-agent'] || 'unknown',
-      meta: { source: 'api/posts/:id/status' },
-    },
-  });
+    const existing = await prisma.post.findUnique({ where: { id: req.params.id } });
+    if (!existing) return res.status(404).json({ error: 'Post nao encontrado' });
 
-  emitTenantDashboardUpdate(post.tenantId, 'post_status_updated');
-  res.json(post);
+    const payload = getTokenPayload(req);
+    if (!payload && !['APPROVED', 'ADJUSTMENT'].includes(normalizedStatus)) {
+      return res.status(403).json({ error: 'Acao nao permitida no link publico.' });
+    }
+    if (payload && existing.tenantId !== payload.tenantId) {
+      return res.status(403).json({ error: 'Sem permissao para alterar este projeto.' });
+    }
+
+    const post = await prisma.post.update({
+      where: { id: req.params.id },
+      data: { status: normalizedStatus },
+    });
+
+    await prisma.approvalEvent.create({
+      data: {
+        postId: post.id,
+        actorName: normalizeText(actorName) || (payload ? 'Agency' : 'Cliente'),
+        action: normalizedStatus,
+        postVersion: post.version,
+        versionHash: post.currentVersionHash,
+        ipAddress: getClientIp(req),
+        userAgent: req.headers['user-agent'] || 'unknown',
+        meta: { source: 'api/posts/:id/status', publicReview: !payload },
+      },
+    });
+
+    emitTenantDashboardUpdate(post.tenantId, 'post_status_updated');
+    res.json(post);
+  } catch {
+    res.status(500).json({ error: 'Erro ao atualizar status.' });
+  }
 });
 
 app.post('/api/posts/:id/publish', async (req, res) => {
+  const payload = requireAuthPayload(req, res);
+  if (!payload) return;
+
   const post = await prisma.post.findUnique({ where: { id: req.params.id } });
   if (!post) return res.status(404).json({ error: 'Post nao encontrado' });
+  if (post.tenantId !== payload.tenantId) {
+    return res.status(403).json({ error: 'Sem permissao para publicar este projeto.' });
+  }
   if (post.status !== 'APPROVED') {
     return res.status(409).json({ error: 'So e permitido publicar post aprovado' });
   }
@@ -1476,6 +1538,18 @@ app.post('/api/posts/:id/publish', async (req, res) => {
 });
 
 app.delete('/api/posts/:id', async (req, res) => {
+  const payload = requireAuthPayload(req, res);
+  if (!payload) return;
+
+  const post = await prisma.post.findUnique({
+    where: { id: req.params.id },
+    select: { tenantId: true },
+  });
+  if (!post) return res.status(404).json({ error: 'Post nao encontrado' });
+  if (post.tenantId !== payload.tenantId) {
+    return res.status(403).json({ error: 'Sem permissao para excluir este projeto.' });
+  }
+
   const deleted = await prisma.post.delete({ where: { id: req.params.id } });
   emitTenantDashboardUpdate(deleted.tenantId, 'post_deleted');
   res.status(204).send();
@@ -1492,7 +1566,11 @@ app.post('/api/posts/:id/comments', async (req, res) => {
 
   const normalizedText = String(text).trim();
   const normalizedAuthor = String(author).trim();
-  const normalizedAction = String(action || 'comment').toUpperCase();
+  const normalizedAction = String(action || 'comment').trim().toUpperCase();
+  if (!['COMMENT', 'APPROVED', 'ADJUSTMENT', 'CHANGES_REQUESTED'].includes(normalizedAction)) {
+    return res.status(400).json({ error: 'Acao invalida.' });
+  }
+  const eventAction = 'COMMENT';
 
   const post = await prisma.post.findUnique({ where: { id: req.params.id } });
   if (!post) return res.status(404).json({ error: 'Post nao encontrado' });
@@ -1516,7 +1594,7 @@ app.post('/api/posts/:id/comments', async (req, res) => {
     data: {
       postId: req.params.id,
       actorName: normalizedAuthor,
-      action: normalizedAction,
+      action: eventAction,
       postVersion: post.version,
       versionHash: post.currentVersionHash,
       ipAddress: getClientIp(req),
@@ -1530,7 +1608,19 @@ app.post('/api/posts/:id/comments', async (req, res) => {
 });
 
 app.patch('/api/tasks/:id', async (req, res) => {
+  const payload = requireAuthPayload(req, res);
+  if (!payload) return;
+
   const { done } = req.body;
+  const existing = await prisma.taskItem.findUnique({
+    where: { id: req.params.id },
+    include: { post: { select: { tenantId: true } } },
+  });
+  if (!existing) return res.status(404).json({ error: 'Tarefa nao encontrada' });
+  if (existing.post?.tenantId !== payload.tenantId) {
+    return res.status(403).json({ error: 'Sem permissao para alterar esta tarefa.' });
+  }
+
   const task = await prisma.taskItem.update({
     where: { id: req.params.id },
     data: { done: Boolean(done) },

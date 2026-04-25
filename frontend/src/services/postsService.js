@@ -3,7 +3,6 @@ import { uploadImageToCreativeAssets } from './storageService';
 
 export async function createPostWithImage({ title, channel, caption, imageFile, clientName, slaHours }) {
   const publicUrl = await uploadImageToCreativeAssets(imageFile);
-  const tenantId = localStorage.getItem('aprovaflow-tenant');
 
   const response = await api.post('/posts', {
     title,
@@ -11,7 +10,6 @@ export async function createPostWithImage({ title, channel, caption, imageFile, 
     caption,
     slaHours,
     imageUrl: publicUrl,
-    tenantId,
     clientName: clientName?.trim(),
   });
 
