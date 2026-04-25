@@ -50,6 +50,10 @@ model Post {
   channel            String
   caption            String?
   imageUrl           String
+  mediaType          String   @default("IMAGE")
+  mediaName          String?
+  mediaSize          Int?
+  mediaMimeType      String?
   status             String   @default("PENDING") // PENDING, APPROVED, ADJUSTMENT
   version            Int      @default(1)
   currentVersionHash String?

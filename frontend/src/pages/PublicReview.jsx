@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom'
 import confetti from 'canvas-confetti'
 import StatusBadge from '../components/ui/StatusBadge'
 import { getPostByPublicSlug, submitPostReviewAction, updatePostById } from '../services/reviewService'
+import { isVideoAsset } from '../services/storageService'
 import { CheckCircle2, RotateCcw } from 'lucide-react'
 
 const initialFormState = {
@@ -191,11 +192,21 @@ function PublicReview() {
 
           {post.image_url && (
             <div className="relative group rounded-2xl overflow-hidden shadow-2xl ring-1 ring-white/10 mb-8 border border-slate-700/50">
-              <img
-                src={post.image_url}
-                alt={post.title}
-                className="max-h-[600px] w-full object-cover transform bg-[#050B14]"
-              />
+              {isVideoAsset(post.media_type) ? (
+                <video
+                  src={post.image_url}
+                  className="max-h-[680px] w-full bg-black"
+                  controls
+                  playsInline
+                  preload="metadata"
+                />
+              ) : (
+                <img
+                  src={post.image_url}
+                  alt={post.title}
+                  className="max-h-[600px] w-full object-cover transform bg-[#050B14]"
+                />
+              )}
               <div className="absolute inset-0 ring-1 ring-inset ring-white/10 rounded-2xl pointer-events-none"></div>
             </div>
           )}

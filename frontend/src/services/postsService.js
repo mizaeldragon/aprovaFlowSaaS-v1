@@ -1,15 +1,19 @@
 import api from './api';
-import { uploadImageToCreativeAssets } from './storageService';
+import { uploadCreativeAsset } from './storageService';
 
 export async function createPostWithImage({ title, channel, caption, imageFile, clientName, slaHours }) {
-  const publicUrl = await uploadImageToCreativeAssets(imageFile);
+  const media = await uploadCreativeAsset(imageFile);
 
   const response = await api.post('/posts', {
     title,
     channel,
     caption,
     slaHours,
-    imageUrl: publicUrl,
+    imageUrl: media.mediaUrl,
+    mediaType: media.mediaType,
+    mediaName: media.mediaName,
+    mediaSize: media.mediaSize,
+    mediaMimeType: media.mediaMimeType,
     clientName: clientName?.trim(),
   });
 
@@ -31,8 +35,10 @@ export async function updatePostWithImage({ postId, title, channel, caption, ima
   if (!postId) throw new Error('Post ID obrigatorio');
 
   let imageUrl = currentImageUrl || '';
+  let media = {};
   if (imageFile) {
-    imageUrl = await uploadImageToCreativeAssets(imageFile);
+    media = await uploadCreativeAsset(imageFile);
+    imageUrl = media.mediaUrl;
   }
 
   const response = await api.patch(`/posts/${postId}`, {
@@ -40,6 +46,10 @@ export async function updatePostWithImage({ postId, title, channel, caption, ima
     channel,
     caption,
     imageUrl,
+    mediaType: media.mediaType,
+    mediaName: media.mediaName,
+    mediaSize: media.mediaSize,
+    mediaMimeType: media.mediaMimeType,
     clientName: clientName?.trim(),
     slaHours,
     actorName: actorName || 'Agency',

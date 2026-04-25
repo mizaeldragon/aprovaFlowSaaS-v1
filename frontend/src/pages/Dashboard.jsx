@@ -8,7 +8,7 @@ import {
 } from 'lucide-react'
 import StatusBadge from '../components/ui/StatusBadge'
 import { deletePostById, listPosts, updatePostById, createPost, publishPostById, listSlaAlerts, updateTaskById } from '../services/reviewService'
-import { uploadImageToCreativeAssets } from '../services/storageService'
+import { uploadCreativeAsset } from '../services/storageService'
 
 const ALLOWED_CHANNELS = ['Instagram', 'LinkedIn', 'Facebook']
 
@@ -59,6 +59,7 @@ function Dashboard() {
   const [editImageFile, setEditImageFile] = useState(null)
   const [editForm, setEditForm] = useState({
     title: '', clientName: '', channel: 'Instagram', caption: '', status: 'pending', public_slug: '', image_url: '',
+    media_type: 'IMAGE', media_name: '', media_size: 0, media_mime_type: '',
   })
 
   const actionsMenuRef = useRef(null)
@@ -330,6 +331,10 @@ function Dashboard() {
     setEditForm({
       title: post.title || '', clientName: post.clientName || '', channel: post.channel || 'Instagram', caption: post.caption || '',
       status: post.status || 'pending', public_slug: post.public_slug || '', image_url: post.image_url || '',
+      media_type: post.media_type || 'IMAGE',
+      media_name: post.media_name || '',
+      media_size: post.media_size || 0,
+      media_mime_type: post.media_mime_type || '',
     })
     setIsEditModalOpen(true)
   }
@@ -338,8 +343,18 @@ function Dashboard() {
     setIsSavingEdit(true)
     try {
       let nextImageUrl = editForm.image_url
-      if (editImageFile) nextImageUrl = await uploadImageToCreativeAssets(editImageFile)
-      const updatedPost = await updatePostById(editingPost.id, { ...editForm, image_url: nextImageUrl })
+      let mediaMeta = {}
+      if (editImageFile) {
+        const uploaded = await uploadCreativeAsset(editImageFile)
+        nextImageUrl = uploaded.mediaUrl
+        mediaMeta = {
+          media_type: uploaded.mediaType,
+          media_name: uploaded.mediaName,
+          media_size: uploaded.mediaSize,
+          media_mime_type: uploaded.mediaMimeType,
+        }
+      }
+      const updatedPost = await updatePostById(editingPost.id, { ...editForm, ...mediaMeta, image_url: nextImageUrl })
       setPosts(prev => prev.map(p => p.id === updatedPost.id ? updatedPost : p))
       setIsEditModalOpen(false)
     } catch {
@@ -357,7 +372,17 @@ function Dashboard() {
     setIsCreatingPost(true)
     try {
       let imageUrl = null
-      if (editImageFile) imageUrl = await uploadImageToCreativeAssets(editImageFile)
+      let mediaMeta = {}
+      if (editImageFile) {
+        const uploaded = await uploadCreativeAsset(editImageFile)
+        imageUrl = uploaded.mediaUrl
+        mediaMeta = {
+          media_type: uploaded.mediaType,
+          media_name: uploaded.mediaName,
+          media_size: uploaded.mediaSize,
+          media_mime_type: uploaded.mediaMimeType,
+        }
+      }
       
       const slug = editForm.public_slug || Math.random().toString(36).substring(7)
       
@@ -368,7 +393,8 @@ function Dashboard() {
         caption: editForm.caption,
         status: editForm.status,
         public_slug: slug,
-        image_url: imageUrl
+        image_url: imageUrl,
+        ...mediaMeta,
       }
       
       if (typeof createPost === 'function') {
@@ -790,8 +816,9 @@ function Dashboard() {
               </div>
 
               <div className="sm:col-span-2">
-                 <label className="text-slate-400 font-bold tracking-widest text-[10px] block mb-2">ARTE (IMAGEM/VÍDEO)</label>
-                 <input type="file" accept="image/*" onChange={e => setEditImageFile(e.target.files?.[0])} className="w-full bg-[#050B14] border border-slate-800 rounded-xl px-4 py-3 text-white file:mr-4 file:bg-slate-800 file:border-none file:text-white file:px-4 file:py-1 file:rounded-md file:text-xs file:font-bold hover:file:bg-slate-700" />
+                 <label className="text-slate-400 font-bold tracking-widest text-[10px] block mb-2">ARTE (IMAGEM OU VIDEO)</label>
+                 <input type="file" accept="image/*,video/mp4,video/webm,video/quicktime" onChange={e => setEditImageFile(e.target.files?.[0])} className="w-full bg-[#050B14] border border-slate-800 rounded-xl px-4 py-3 text-white file:mr-4 file:bg-slate-800 file:border-none file:text-white file:px-4 file:py-1 file:rounded-md file:text-xs file:font-bold hover:file:bg-slate-700" />
+                 <p className="mt-2 text-[10px] font-semibold uppercase tracking-widest text-slate-500">Imagens ate 10MB. Videos Pro ate 150MB: MP4, WEBM ou MOV.</p>
               </div>
 
               <div className="sm:col-span-2">
@@ -843,4 +870,5 @@ function Dashboard() {
 }
 
 export default Dashboard
+
 

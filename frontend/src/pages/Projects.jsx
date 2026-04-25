@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { io } from 'socket.io-client'
-import { ChevronLeft, ChevronRight, ExternalLink, FileText, Link2, Menu, Pencil } from 'lucide-react'
+import { ChevronLeft, ChevronRight, ExternalLink, FileText, Link2, Menu, Pencil, Video } from 'lucide-react'
 import StatusBadge from '../components/ui/StatusBadge'
 import { listPosts } from '../services/reviewService'
+import { isVideoAsset } from '../services/storageService'
 
 const ITEMS_PER_PAGE = 10
 
@@ -170,7 +171,11 @@ function Projects() {
                 <tr key={post.id} className="hover:bg-[#111827]/40 transition-colors">
                   <td className="px-2 py-3">
                     <div className="flex items-center gap-3">
-                      {post.image_url ? (
+                      {post.image_url && isVideoAsset(post.media_type) ? (
+                        <div className="flex h-8 w-8 items-center justify-center rounded-md bg-cyan-500/10 ring-1 ring-cyan-500/30">
+                          <Video size={14} className="text-cyan-300" />
+                        </div>
+                      ) : post.image_url ? (
                         <img src={post.image_url} className="h-8 w-8 rounded-md object-cover ring-1 ring-white/10" alt="" />
                       ) : (
                         <div className="flex h-8 w-8 items-center justify-center rounded-md bg-[#111827] ring-1 ring-slate-800">

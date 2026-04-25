@@ -10,6 +10,7 @@ import Stripe from 'stripe';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
 import { promises as dns } from 'dns';
+import { createClient } from '@supabase/supabase-js';
 import { prisma } from './prisma';
 
 dotenv.config();
@@ -36,10 +37,18 @@ const STRIPE_PRICE_PRO_MONTHLY = String(process.env.STRIPE_PRICE_PRO_MONTHLY || 
 const STRIPE_PRICE_PRO_YEARLY = String(process.env.STRIPE_PRICE_PRO_YEARLY || '').trim();
 const CUSTOM_DOMAIN_CNAME_TARGET = String(process.env.CUSTOM_DOMAIN_CNAME_TARGET || 'lb.aprovaflow.com').trim().toLowerCase();
 const OPS_ALERT_WEBHOOK_URL = String(process.env.OPS_ALERT_WEBHOOK_URL || '').trim();
+const SUPABASE_URL = String(process.env.SUPABASE_URL || '').trim();
+const SUPABASE_SERVICE_ROLE_KEY = String(process.env.SUPABASE_SERVICE_ROLE_KEY || '').trim();
+const SUPABASE_STORAGE_BUCKET = String(process.env.SUPABASE_STORAGE_BUCKET || 'creative-assets').trim();
 const BOOTED_AT = new Date();
 
 const stripe = STRIPE_SECRET_KEY
   ? new Stripe(STRIPE_SECRET_KEY, { apiVersion: '2025-08-27.basil' })
+  : null;
+const supabaseAdmin = SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY
+  ? createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    })
   : null;
 
 function requireStripe() {
@@ -500,6 +509,31 @@ function normalizeText(value: unknown) {
   return String(value || '').trim();
 }
 
+function normalizeMediaType(value: unknown): 'IMAGE' | 'VIDEO' {
+  return String(value || '').trim().toUpperCase() === 'VIDEO' ? 'VIDEO' : 'IMAGE';
+}
+
+function sanitizeFileName(value: unknown) {
+  const raw = String(value || 'arquivo').trim().toLowerCase();
+  return raw
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9._-]+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '')
+    .slice(0, 120) || 'arquivo';
+}
+
+function isAllowedMediaMime(mimeType: string, mediaType: 'IMAGE' | 'VIDEO') {
+  const imageTypes = ['image/png', 'image/jpeg', 'image/webp', 'image/gif', 'image/svg+xml'];
+  const videoTypes = ['video/mp4', 'video/webm', 'video/quicktime'];
+  return mediaType === 'VIDEO' ? videoTypes.includes(mimeType) : imageTypes.includes(mimeType);
+}
+
+function getMediaSizeLimit(mediaType: 'IMAGE' | 'VIDEO') {
+  return mediaType === 'VIDEO' ? 150 * 1024 * 1024 : 10 * 1024 * 1024;
+}
+
 function validateRegisterPayload(payload: { name?: unknown; email?: unknown; password?: unknown; agencyName?: unknown }) {
   const name = normalizeText(payload.name);
   const email = normalizeEmail(payload.email);
@@ -637,6 +671,10 @@ app.get('/api/ops/health', (req, res) => {
     },
     alerting: {
       webhookConfigured: Boolean(OPS_ALERT_WEBHOOK_URL),
+    },
+    storage: {
+      configured: Boolean(SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY),
+      bucket: SUPABASE_STORAGE_BUCKET,
     },
   });
 });
@@ -935,6 +973,73 @@ app.post('/api/ai/improve-copy', async (req, res) => {
     res.json({ improvedCopy: response.choices[0].message.content });
   } catch {
     res.status(500).json({ error: 'Erro ao gerar texto com IA' });
+  }
+});
+
+app.post('/api/uploads/signed-url', async (req, res) => {
+  try {
+    const payload = requireAuthPayload(req, res);
+    if (!payload) return;
+    if (!supabaseAdmin) {
+      return res.status(500).json({ error: 'Supabase Storage nao configurado no servidor.' });
+    }
+
+    const tenant = await prisma.tenant.findUnique({
+      where: { id: payload.tenantId },
+      select: { id: true, plan: true, isPro: true },
+    });
+    if (!tenant) return res.status(404).json({ error: 'Agencia nao encontrada.' });
+
+    const fileName = sanitizeFileName(req.body?.fileName);
+    const mimeType = normalizeText(req.body?.contentType).toLowerCase();
+    const mediaType = normalizeMediaType(req.body?.mediaType);
+    const size = Number(req.body?.size || 0);
+
+    if (!mimeType || !isAllowedMediaMime(mimeType, mediaType)) {
+      return res.status(400).json({ error: 'Formato de arquivo nao permitido.' });
+    }
+    if (!Number.isFinite(size) || size <= 0) {
+      return res.status(400).json({ error: 'Tamanho do arquivo invalido.' });
+    }
+
+    const maxBytes = getMediaSizeLimit(mediaType);
+    if (size > maxBytes) {
+      const maxMb = Math.floor(maxBytes / 1024 / 1024);
+      return res.status(400).json({ error: `Arquivo muito grande. Maximo: ${maxMb}MB.` });
+    }
+
+    if (mediaType === 'VIDEO' && !hasProAccess(tenant)) {
+      return res.status(403).json({ error: 'Upload de video esta disponivel apenas no plano Pro.' });
+    }
+
+    const path = `${payload.tenantId}/${Date.now()}-${crypto.randomUUID()}-${fileName}`;
+    const { data, error } = await supabaseAdmin.storage
+      .from(SUPABASE_STORAGE_BUCKET)
+      .createSignedUploadUrl(path, { upsert: false });
+
+    if (error || !data?.token) {
+      throw error || new Error('SIGNED_UPLOAD_URL_FAILED');
+    }
+
+    const publicUrl = supabaseAdmin.storage.from(SUPABASE_STORAGE_BUCKET).getPublicUrl(path).data.publicUrl;
+    return res.json({
+      bucket: SUPABASE_STORAGE_BUCKET,
+      path,
+      token: data.token,
+      signedUrl: data.signedUrl,
+      publicUrl,
+      mediaType,
+      mediaName: fileName,
+      mediaSize: size,
+      mediaMimeType: mimeType,
+    });
+  } catch (error) {
+    await reportBackendError({
+      scope: 'uploads.signed_url',
+      error,
+      meta: { tenantId: getTokenPayload(req)?.tenantId || '' },
+    });
+    return res.status(500).json({ error: 'Erro ao preparar upload de midia.' });
   }
 });
 
@@ -1276,12 +1381,23 @@ app.post('/api/posts', async (req, res) => {
   if (!payload) return;
 
   const { title, channel, caption, imageUrl, clientName, slaHours } = req.body;
+  const mediaType = normalizeMediaType(req.body?.mediaType);
+  const mediaName = normalizeText(req.body?.mediaName) || null;
+  const mediaMimeType = normalizeText(req.body?.mediaMimeType) || null;
+  const mediaSize = Number.isFinite(Number(req.body?.mediaSize)) ? Math.max(0, Math.round(Number(req.body.mediaSize))) : null;
+  const tenant = await prisma.tenant.findUnique({
+    where: { id: payload.tenantId },
+    select: { plan: true, isPro: true },
+  });
+  if (mediaType === 'VIDEO' && !hasProAccess(tenant)) {
+    return res.status(403).json({ error: 'Projetos de video estao disponiveis apenas no plano Pro.' });
+  }
   if (!clientName || !String(clientName).trim()) {
     return res.status(400).json({ error: 'Nome do cliente obrigatorio' });
   }
   if (!normalizeText(title)) return res.status(400).json({ error: 'Titulo obrigatorio.' });
   if (!normalizeText(channel)) return res.status(400).json({ error: 'Canal obrigatorio.' });
-  if (!normalizeText(imageUrl)) return res.status(400).json({ error: 'Imagem obrigatoria.' });
+  if (!normalizeText(imageUrl)) return res.status(400).json({ error: 'Midia obrigatoria.' });
 
   const normalizedSlaHours = Number.isFinite(Number(slaHours)) ? Math.max(1, Number(slaHours)) : 48;
   const dueAt = new Date(Date.now() + normalizedSlaHours * 60 * 60 * 1000);
@@ -1293,6 +1409,10 @@ app.post('/api/posts', async (req, res) => {
       channel: normalizeText(channel),
       caption: normalizeText(caption),
       imageUrl: normalizeText(imageUrl),
+      mediaType,
+      mediaName,
+      mediaSize,
+      mediaMimeType,
       clientName: String(clientName).trim(),
       tenantId: payload.tenantId,
       slaHours: normalizedSlaHours,
@@ -1376,6 +1496,10 @@ app.patch('/api/posts/:id', async (req, res) => {
     if (post.tenantId !== payload.tenantId) {
       return res.status(403).json({ error: 'Sem permissao para editar este projeto.' });
     }
+    const tenant = await prisma.tenant.findUnique({
+      where: { id: payload.tenantId },
+      select: { plan: true, isPro: true },
+    });
 
     const title = normalizeText(req.body?.title);
     const channel = normalizeText(req.body?.channel);
@@ -1383,13 +1507,22 @@ app.patch('/api/posts/:id', async (req, res) => {
     const clientName = normalizeText(req.body?.clientName);
     const incomingImageUrl = typeof req.body?.imageUrl === 'string' ? req.body.imageUrl.trim() : '';
     const imageUrl = incomingImageUrl || post.imageUrl;
+    const mediaType = normalizeMediaType(req.body?.mediaType || (post as any).mediaType);
+    const mediaName = normalizeText(req.body?.mediaName) || (post as any).mediaName || null;
+    const mediaMimeType = normalizeText(req.body?.mediaMimeType) || (post as any).mediaMimeType || null;
+    const mediaSize = Number.isFinite(Number(req.body?.mediaSize))
+      ? Math.max(0, Math.round(Number(req.body.mediaSize)))
+      : ((post as any).mediaSize ?? null);
+    if (mediaType === 'VIDEO' && !hasProAccess(tenant)) {
+      return res.status(403).json({ error: 'Projetos de video estao disponiveis apenas no plano Pro.' });
+    }
     const actorName = normalizeText(req.body?.actorName) || 'Agency';
 
     if (!title) return res.status(400).json({ error: 'Titulo obrigatorio.' });
     if (!channel) return res.status(400).json({ error: 'Canal obrigatorio.' });
     if (!caption) return res.status(400).json({ error: 'Legenda obrigatoria.' });
     if (!clientName) return res.status(400).json({ error: 'Nome do cliente obrigatorio.' });
-    if (!imageUrl) return res.status(400).json({ error: 'Imagem obrigatoria.' });
+    if (!imageUrl) return res.status(400).json({ error: 'Midia obrigatoria.' });
 
     const normalizedSlaHours = Number.isFinite(Number(req.body?.slaHours))
       ? Math.max(1, Number(req.body.slaHours))
@@ -1401,6 +1534,10 @@ app.patch('/api/posts/:id', async (req, res) => {
       String(post.caption || '') !== caption ||
       String(post.clientName || '') !== clientName ||
       post.imageUrl !== imageUrl ||
+      String((post as any).mediaType || 'IMAGE') !== mediaType ||
+      String((post as any).mediaName || '') !== String(mediaName || '') ||
+      String((post as any).mediaMimeType || '') !== String(mediaMimeType || '') ||
+      Number((post as any).mediaSize || 0) !== Number(mediaSize || 0) ||
       Number(post.slaHours || 48) !== normalizedSlaHours;
 
     const nextVersion = hasContentChange ? post.version + 1 : post.version;
@@ -1422,6 +1559,10 @@ app.patch('/api/posts/:id', async (req, res) => {
         caption,
         clientName,
         imageUrl,
+        mediaType,
+        mediaName,
+        mediaSize,
+        mediaMimeType,
         slaHours: normalizedSlaHours,
         dueAt,
         status: hasContentChange ? 'PENDING' : post.status,

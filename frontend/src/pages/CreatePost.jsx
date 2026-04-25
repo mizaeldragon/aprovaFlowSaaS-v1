@@ -98,7 +98,7 @@ function CreatePost() {
     const missingImageOnEdit = isEditMode && !form.imageFile && !currentImageUrl
 
     if (!form.title.trim() || !form.clientName.trim() || !form.channel || !form.caption.trim() || missingImage || missingImageOnEdit) {
-      setError('Por favor, preencha todos os campos e selecione uma imagem.')
+      setError('Por favor, preencha todos os campos e selecione uma imagem ou video.')
       return
     }
 
@@ -230,7 +230,7 @@ function CreatePost() {
                   Upload do criativo
                 </label>
                 <div className="relative group">
-                  <input id="imageFile" name="imageFile" type="file" accept="image/*" onChange={handleFileChange} className="hidden" />
+                  <input id="imageFile" name="imageFile" type="file" accept="image/*,video/mp4,video/webm,video/quicktime" onChange={handleFileChange} className="hidden" />
                   <label
                     htmlFor="imageFile"
                     className={`flex flex-col items-center justify-center w-full h-52 border-2 border-dashed rounded-[2.5rem] cursor-pointer transition-all duration-500 ${
@@ -251,14 +251,14 @@ function CreatePost() {
                           <ImageIcon size={28} />
                         </div>
                         <p className="text-xs font-bold text-slate-300 group-hover:text-white transition-colors">Arraste ou clique para enviar</p>
-                        <p className="text-[10px] text-slate-600 mt-2 uppercase tracking-[0.2em]">Imagem de alta resolucao</p>
+                        <p className="text-[10px] text-slate-600 mt-2 uppercase tracking-[0.2em]">Imagem ate 10MB ou video Pro ate 150MB</p>
                       </>
                     )}
                   </label>
                 </div>
                 {isEditMode && currentImageUrl ? (
                   <p className="mt-2 px-1 text-[10px] font-semibold tracking-wider text-slate-500">
-                    Imagem atual sera mantida se voce nao selecionar outra.
+                    Midia atual sera mantida se voce nao selecionar outra.
                   </p>
                 ) : null}
               </div>

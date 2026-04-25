@@ -6,6 +6,11 @@ const mapPostToUI = (post) => ({
   created_at: post.createdAt,
   updated_at: post.updatedAt,
   image_url: post.imageUrl,
+  media_url: post.imageUrl,
+  media_type: post.mediaType || 'IMAGE',
+  media_name: post.mediaName || '',
+  media_size: post.mediaSize || 0,
+  media_mime_type: post.mediaMimeType || '',
   public_slug: post.id,
   tasks: post.tasks || [],
   approval_events: post.approvalEvents || [],
@@ -35,11 +40,29 @@ export async function listCommentsByPostId(postId) {
 }
 
 export async function updatePostById(postId, payload) {
-  if (payload.status) {
+  const editableFields = ['title', 'channel', 'caption', 'clientName', 'image_url', 'media_type', 'media_name', 'media_size', 'media_mime_type'];
+  const hasEditableFields = editableFields.some((field) => Object.prototype.hasOwnProperty.call(payload, field));
+
+  if (payload.status && !hasEditableFields) {
     const dbStatus = payload.status === 'approved' ? 'APPROVED' : payload.status === 'changes_requested' ? 'ADJUSTMENT' : 'PENDING';
     const res = await api.patch(`/posts/${postId}/status`, { status: dbStatus, actorName: payload.actorName || 'Agency' });
     return mapPostToUI(res.data);
   }
+
+  const res = await api.patch(`/posts/${postId}`, {
+    title: payload.title,
+    channel: payload.channel,
+    caption: payload.caption,
+    clientName: payload.clientName,
+    imageUrl: payload.image_url || payload.media_url,
+    mediaType: payload.media_type,
+    mediaName: payload.media_name,
+    mediaSize: payload.media_size,
+    mediaMimeType: payload.media_mime_type,
+    slaHours: payload.sla_hours,
+    actorName: payload.actorName || 'Agency',
+  });
+  return mapPostToUI(res.data);
 }
 
 export async function deletePostById(postId) {
@@ -50,7 +73,15 @@ export async function createPost(payload) {
   if (!payload?.clientName || !String(payload.clientName).trim()) {
     throw new Error('Nome do cliente obrigatorio');
   }
-  const res = await api.post('/posts', { ...payload, clientName: String(payload.clientName).trim() });
+  const res = await api.post('/posts', {
+    ...payload,
+    clientName: String(payload.clientName).trim(),
+    imageUrl: payload.image_url || payload.media_url,
+    mediaType: payload.media_type,
+    mediaName: payload.media_name,
+    mediaSize: payload.media_size,
+    mediaMimeType: payload.media_mime_type,
+  });
   return mapPostToUI(res.data);
 }
 

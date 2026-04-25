@@ -1,7 +1,8 @@
 import { useMemo, useState, useEffect } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import api from '../services/api'
-import { Kanban as KanbanIcon, Clock, CheckCircle2, AlertCircle, MoreHorizontal } from 'lucide-react'
+import { Kanban as KanbanIcon, Clock, CheckCircle2, AlertCircle, MoreHorizontal, Video } from 'lucide-react'
+import { isVideoAsset } from '../services/storageService'
 
 function Kanban() {
   const [searchParams] = useSearchParams()
@@ -91,7 +92,13 @@ function Kanban() {
 
                   {post.imageUrl && (
                     <div className="w-full h-24 rounded-xl overflow-hidden mb-4 border border-slate-800 relative">
-                      <img src={post.imageUrl} className="w-full h-full object-cover grayscale-[0.5] group-hover:grayscale-0 transition-all duration-500" alt="" />
+                      {isVideoAsset(post.mediaType) ? (
+                        <div className="flex h-full w-full items-center justify-center bg-cyan-500/10 text-cyan-300">
+                          <Video size={24} />
+                        </div>
+                      ) : (
+                        <img src={post.imageUrl} className="w-full h-full object-cover grayscale-[0.5] group-hover:grayscale-0 transition-all duration-500" alt="" />
+                      )}
                       <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent"></div>
                     </div>
                   )}
