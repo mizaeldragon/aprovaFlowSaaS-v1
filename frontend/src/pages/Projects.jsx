@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { io } from 'socket.io-client'
-import { ChevronLeft, ChevronRight, ExternalLink, FileText, Link2, Menu, Pencil, Video } from 'lucide-react'
+import { ChevronLeft, ChevronRight, ExternalLink, FileText, Link2, Menu, Pencil, Trash2, Video } from 'lucide-react'
 import StatusBadge from '../components/ui/StatusBadge'
-import { listPosts } from '../services/reviewService'
+import { deletePostById, listPosts } from '../services/reviewService'
 import { isVideoAsset } from '../services/storageService'
 
 const ITEMS_PER_PAGE = 10
@@ -16,6 +16,10 @@ function Projects() {
   const [openMenuPostId, setOpenMenuPostId] = useState(null)
   const [menuPosition, setMenuPosition] = useState({ top: 0, left: 0 })
   const [copyFeedback, setCopyFeedback] = useState('')
+  const [deleteFeedback, setDeleteFeedback] = useState('')
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false)
+  const [isDeletingPost, setIsDeletingPost] = useState(false)
+  const [deletingPost, setDeletingPost] = useState(null)
   const actionsMenuRef = useRef(null)
   const menuButtonRefs = useRef(new Map())
   const realtimeRefreshTimerRef = useRef(null)
@@ -131,6 +135,30 @@ function Projects() {
     } catch {
       setCopyFeedback('Erro ao copiar link.')
       setTimeout(() => setCopyFeedback(''), 2200)
+    }
+  }
+
+  const handleOpenDeleteModal = (post) => {
+    setDeletingPost(post)
+    setIsDeleteModalOpen(true)
+  }
+
+  const handleDeletePost = async () => {
+    if (!deletingPost?.id) return
+    setIsDeletingPost(true)
+    try {
+      await deletePostById(deletingPost.id)
+      setPosts((current) => current.filter((post) => post.id !== deletingPost.id))
+      setDeleteFeedback('Projeto excluido com sucesso.')
+      setTimeout(() => setDeleteFeedback(''), 2200)
+      setError('')
+      setIsDeleteModalOpen(false)
+      setDeletingPost(null)
+    } catch {
+      setError('Nao foi possivel excluir o projeto.')
+      setTimeout(() => setError(''), 2500)
+    } finally {
+      setIsDeletingPost(false)
     }
   }
 
@@ -281,13 +309,61 @@ function Projects() {
             >
               <ExternalLink size={16} /> Abrir no Fluxo
             </Link>
+            <button
+              type="button"
+              onClick={() => {
+                handleOpenDeleteModal(selected)
+                setOpenMenuPostId(null)
+              }}
+              className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-[13px] font-medium text-rose-400 transition-colors hover:bg-rose-500/10 hover:text-rose-300"
+            >
+              <Trash2 size={16} /> Excluir projeto
+            </button>
           </div>
         )
       })()}
 
+      {isDeleteModalOpen && deletingPost ? (
+        <div className="fixed inset-0 z-[130] flex items-center justify-center bg-[#050B14]/80 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-3xl border border-slate-800 bg-[#0B1221] p-6 shadow-2xl">
+            <h3 className="text-xl font-bold text-white">Excluir projeto?</h3>
+            <p className="mt-2 text-sm text-slate-400">
+              Esta acao remove permanentemente o projeto{' '}
+              <strong className="text-white">{`"${deletingPost.title}"`}</strong>.
+            </p>
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  if (isDeletingPost) return
+                  setIsDeleteModalOpen(false)
+                  setDeletingPost(null)
+                }}
+                className="px-4 py-2 text-sm font-bold text-slate-400 transition-colors hover:text-white"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                disabled={isDeletingPost}
+                onClick={handleDeletePost}
+                className="rounded-xl border border-rose-500/40 bg-rose-500/10 px-5 py-2.5 text-sm font-bold text-rose-300 transition-colors hover:bg-rose-500 hover:text-white disabled:opacity-60"
+              >
+                {isDeletingPost ? 'Excluindo...' : 'Confirmar exclusao'}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       {copyFeedback ? (
         <div className="fixed right-8 top-8 z-[130] rounded-xl bg-cyan-500 px-6 py-3 font-bold text-slate-900 shadow-[0_5px_20px_rgba(34,211,238,0.4)]">
           {copyFeedback}
+        </div>
+      ) : null}
+      {deleteFeedback ? (
+        <div className="fixed right-8 top-24 z-[130] rounded-xl bg-rose-500 px-6 py-3 font-bold text-white shadow-[0_5px_20px_rgba(244,63,94,0.4)]">
+          {deleteFeedback}
         </div>
       ) : null}
     </div>
