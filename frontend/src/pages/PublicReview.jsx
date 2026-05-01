@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import confetti from 'canvas-confetti'
 import StatusBadge from '../components/ui/StatusBadge'
-import { getPostByPublicSlug, submitPostReviewAction, updatePostById } from '../services/reviewService'
+import { getPostByPublicSlug, submitPostReviewAction, undoPublicReview } from '../services/reviewService'
 import { isVideoAsset } from '../services/storageService'
 import { CheckCircle2, RotateCcw } from 'lucide-react'
 
@@ -82,8 +82,9 @@ function PublicReview() {
     try {
       if (action === 'approved') fireConfetti();
 
+      // FIX: usa post.public_slug (publicToken) para identificar o post sem expor o UUID interno
       const result = await submitPostReviewAction({
-        postId: post.id,
+        postId: post.public_slug,
         authorName: form.authorName,
         comment: form.comment,
         action,
@@ -102,8 +103,9 @@ function PublicReview() {
     if (!post) return
     setIsSubmitting(true)
     try {
-      const result = await updatePostById(post.id, { status: 'pending' })
-      if (result) setPost((prev) => ({ ...prev, status: 'pending' }))
+      // FIX: usa endpoint público com publicToken — sem expor UUID interno
+      await undoPublicReview(post.public_slug, form.authorName)
+      setPost((prev) => ({ ...prev, status: 'pending' }))
     } catch {
       // ignore
     } finally {

@@ -11,7 +11,8 @@ const mapPostToUI = (post) => ({
   media_name: post.mediaName || '',
   media_size: post.mediaSize || 0,
   media_mime_type: post.mediaMimeType || '',
-  public_slug: post.id,
+  // FIX [CRÍTICO]: usar publicToken como identificador público — não o UUID do post
+  public_slug: post.publicToken || post.id,
   tasks: post.tasks || [],
   approval_events: post.approvalEvents || [],
   due_at: post.dueAt || null,
@@ -85,12 +86,15 @@ export async function createPost(payload) {
   return mapPostToUI(res.data);
 }
 
+// FIX [CRÍTICO]: Usa endpoint público /api/public/:publicToken — sem autenticação, sem expor UUID interno
 export async function getPostByPublicSlug(publicSlug) {
-  const res = await api.get(`/posts/${publicSlug}`);
+  const res = await api.get(`/public/${publicSlug}`);
   return mapPostToUI(res.data);
 }
 
+// FIX [CRÍTICO]: Todas as ações públicas (approve/comment) usam /api/public/:publicToken/*
 export async function submitPostReviewAction({ postId, authorName, comment, action }) {
+  // postId aqui é o publicToken (post.public_slug)
   const normalizedAuthor = authorName?.trim();
   if (!normalizedAuthor) {
     throw new Error('Informe seu nome para continuar.');
@@ -101,18 +105,26 @@ export async function submitPostReviewAction({ postId, authorName, comment, acti
 
   if (action === 'comment') {
     if (!text) throw new Error('Informe um comentario para enviar.');
-    await api.post(`/posts/${postId}/comments`, { author, text, action: 'comment' });
+    await api.post(`/public/${postId}/comments`, { author, text });
     return { status: null };
   }
 
   if (text) {
-    await api.post(`/posts/${postId}/comments`, { author, text, action: 'comment' });
+    await api.post(`/public/${postId}/comments`, { author, text });
   }
 
   const dbStatus = action === 'approved' ? 'APPROVED' : 'ADJUSTMENT';
-
-  await api.patch(`/posts/${postId}/status`, { status: dbStatus, actorName: normalizedAuthor });
+  await api.patch(`/public/${postId}/status`, { status: dbStatus, actorName: normalizedAuthor });
   return { status: action };
+}
+
+// FIX [CRÍTICO]: Undo de revisão pública usa endpoint /api/public/:publicToken/status
+export async function undoPublicReview(publicToken, authorName) {
+  await api.patch(`/public/${publicToken}/status`, {
+    status: 'PENDING',
+    actorName: String(authorName || 'Cliente').trim(),
+  });
+  return { status: 'pending' };
 }
 
 export async function publishPostById(postId) {
@@ -129,4 +141,3 @@ export async function updateTaskById(taskId, done) {
   const res = await api.patch(`/tasks/${taskId}`, { done });
   return res.data;
 }
-

@@ -46,6 +46,7 @@ model User {
 
 model Post {
   id                 String   @id @default(uuid())
+  publicToken        String   @unique @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   title              String
   channel            String
   caption            String?

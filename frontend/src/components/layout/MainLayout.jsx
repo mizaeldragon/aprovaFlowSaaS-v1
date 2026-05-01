@@ -77,9 +77,10 @@ function MainLayout({ children }) {
 
     const rawApi = import.meta.env.VITE_API_URL || 'http://localhost:3000/api'
     const socketUrl = rawApi.replace(/\/api\/?$/, '')
-    const token = localStorage.getItem('aprovaflow-token')
+    const token = api.defaults.headers.common.Authorization?.replace('Bearer ', '') || null
     const socket = io(socketUrl, {
       transports: ['websocket'],
+      withCredentials: true,
       auth: { token },
     })
 

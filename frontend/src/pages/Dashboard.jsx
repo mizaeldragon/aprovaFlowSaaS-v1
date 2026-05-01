@@ -8,6 +8,7 @@ import {
 } from 'lucide-react'
 import StatusBadge from '../components/ui/StatusBadge'
 import { deletePostById, listPosts, updatePostById, createPost, publishPostById, listSlaAlerts, updateTaskById } from '../services/reviewService'
+import api from '../services/api'
 import { uploadCreativeAsset } from '../services/storageService'
 
 const ALLOWED_CHANNELS = ['Instagram', 'LinkedIn', 'Facebook']
@@ -138,9 +139,10 @@ function Dashboard() {
   useEffect(() => {
     const rawApi = import.meta.env.VITE_API_URL || 'http://localhost:3000/api'
     const socketUrl = rawApi.replace(/\/api\/?$/, '')
-    const token = localStorage.getItem('aprovaflow-token')
+    const token = api.defaults.headers.common.Authorization?.replace('Bearer ', '') || null
     const socket = io(socketUrl, {
       transports: ['websocket'],
+      withCredentials: true,
       auth: { token },
     })
 

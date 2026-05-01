@@ -6,6 +6,7 @@ const baseURL = /\/api$/i.test(sanitizedBaseURL) ? sanitizedBaseURL : `${sanitiz
 
 const api = axios.create({
   baseURL,
+  withCredentials: true, // envia cookie httpOnly automaticamente em todas as requisições
 });
 
 export default api;

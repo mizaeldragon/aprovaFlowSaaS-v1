@@ -17,11 +17,11 @@ dotenv.config();
 
 const NODE_ENV = process.env.NODE_ENV || 'development';
 const IS_PRODUCTION = NODE_ENV === 'production';
-const DEV_JWT_SECRET = 'aprovaflow_super_secret_dev_key';
-const JWT_SECRET = process.env.JWT_SECRET || (!IS_PRODUCTION ? DEV_JWT_SECRET : '');
 
+// FIX [CRÍTICO]: JWT_SECRET sem fallback hardcoded — obrigatório em todos os ambientes
+const JWT_SECRET = String(process.env.JWT_SECRET || '').trim();
 if (!JWT_SECRET) {
-  throw new Error('JWT_SECRET obrigatorio em producao.');
+  throw new Error('JWT_SECRET obrigatorio. Defina-o no arquivo .env');
 }
 
 const frontendUrlFromEnv = String(process.env.FRONTEND_URL || '').trim();
@@ -41,6 +41,9 @@ const SUPABASE_URL = String(process.env.SUPABASE_URL || '').trim();
 const SUPABASE_SERVICE_ROLE_KEY = String(process.env.SUPABASE_SERVICE_ROLE_KEY || '').trim();
 const SUPABASE_STORAGE_BUCKET = String(process.env.SUPABASE_STORAGE_BUCKET || 'creative-assets').trim();
 const BOOTED_AT = new Date();
+
+// FIX [CRÍTICO]: Set para idempotência do webhook Stripe
+const processedStripeEvents = new Set<string>();
 
 const stripe = STRIPE_SECRET_KEY
   ? new Stripe(STRIPE_SECRET_KEY, { apiVersion: '2025-08-27.basil' })
@@ -91,10 +94,8 @@ function parseAllowedOrigins() {
 const allowedOrigins = parseAllowedOrigins();
 
 const isOriginAllowed = (origin?: string) => {
-  // Requests sem origin (health checks, backend-to-backend, curl) devem passar.
   if (!origin) return true;
   if (allowedOrigins.includes(origin)) return true;
-
   return false;
 };
 
@@ -148,14 +149,14 @@ async function reportBackendError(params: {
     severity,
     message: errorInfo.message,
     name: errorInfo.name,
-    stack: errorInfo.stack,
+    // FIX [CRÍTICO]: Nunca expor stack trace em produção (pode vazar secrets)
+    stack: IS_PRODUCTION ? undefined : errorInfo.stack,
     meta: params.meta || {},
     ts: new Date().toISOString(),
     env: NODE_ENV,
   };
   console.error('[backend-error]', JSON.stringify(payload));
 
-  // Alerta proativo focado em billing/webhook e falhas criticas.
   if (severity === 'critical' || params.scope.startsWith('billing.')) {
     await notifyOpsWebhook(payload);
   }
@@ -190,6 +191,9 @@ function normalizeHost(value?: string | null) {
     .replace(/\.$/, '');
 }
 
+// FIX [ALTO]: Validação de domínio RFC 1123
+const RFC1123_DOMAIN_REGEX = /^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}$/i;
+
 async function verifyDomainCname(customDomain: string) {
   const domain = normalizeHost(customDomain);
   const expectedTarget = normalizeHost(CUSTOM_DOMAIN_CNAME_TARGET);
@@ -200,6 +204,16 @@ async function verifyDomainCname(customDomain: string) {
       expectedTarget,
       resolvedTo: [] as string[],
       message: 'Dominio nao informado.',
+    };
+  }
+
+  // FIX [ALTO]: Rejeitar domínios com formato inválido antes de chamar dns.resolveCname
+  if (!RFC1123_DOMAIN_REGEX.test(domain)) {
+    return {
+      status: 'invalid',
+      expectedTarget,
+      resolvedTo: [] as string[],
+      message: 'Formato de dominio invalido.',
     };
   }
 
@@ -253,6 +267,13 @@ app.post('/api/billing/webhook', express.raw({ type: 'application/json', limit: 
     }
 
     const event = stripeClient.webhooks.constructEvent(req.body, signature, STRIPE_WEBHOOK_SECRET);
+
+    // FIX [CRÍTICO]: Idempotência — ignorar eventos já processados
+    if (processedStripeEvents.has(event.id)) {
+      return res.json({ received: true, duplicate: true });
+    }
+    processedStripeEvents.add(event.id);
+    setTimeout(() => processedStripeEvents.delete(event.id), 24 * 60 * 60 * 1000);
 
     const markTenantSubscription = async (params: {
       tenantId: string;
@@ -412,12 +433,33 @@ function emitTenantDashboardUpdate(tenantId?: string | null, reason = 'updated')
   });
 }
 
+// FIX [CRÍTICO]: Leitura de cookie httpOnly para auth
+function parseTokenFromCookies(cookieHeader: string | undefined): string | null {
+  if (!cookieHeader) return null;
+  const match = cookieHeader.match(/(?:^|;\s*)aprovaflow-token=([^;]+)/);
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
+// FIX [CRÍTICO]: Emitir cookie httpOnly no login/register
+function setAuthCookie(res: express.Response, token: string) {
+  res.cookie('aprovaflow-token', token, {
+    httpOnly: true,
+    secure: IS_PRODUCTION,
+    sameSite: IS_PRODUCTION ? 'strict' : 'lax',
+    maxAge: 7 * 24 * 60 * 60 * 1000,
+    path: '/',
+  });
+}
+
+// FIX [CRÍTICO]: jwt.verify com algoritmo explícito HS256; lê de cookie OU Authorization header
 function getTokenPayload(req: express.Request): JwtPayload | null {
   try {
     const authHeader = req.headers.authorization;
-    if (!authHeader) return null;
-    const token = authHeader.split(' ')[1];
-    return jwt.verify(token, JWT_SECRET) as JwtPayload;
+    const rawToken = authHeader?.startsWith('Bearer ')
+      ? authHeader.slice(7)
+      : parseTokenFromCookies(req.headers.cookie);
+    if (!rawToken) return null;
+    return jwt.verify(rawToken, JWT_SECRET, { algorithms: ['HS256'] }) as JwtPayload;
   } catch {
     return null;
   }
@@ -443,23 +485,24 @@ async function resolveCurrentTenantFromAuth(req: express.Request) {
   return { payload, tenant };
 }
 
+// Socket.io: tenta autenticar mas permite conexão mesmo sem token.
+// Sockets sem tenantId simplesmente não entram em nenhuma sala e não recebem updates.
+// A segurança real está nas APIs HTTP — Socket.io é apenas notificação.
 io.use((socket, next) => {
   try {
     const authToken = socket.handshake.auth?.token as string | undefined;
     const bearerToken = typeof authToken === 'string' && authToken.startsWith('Bearer ')
       ? authToken.slice(7)
-      : authToken;
+      : authToken || parseTokenFromCookies(socket.handshake.headers.cookie);
 
     if (bearerToken) {
-      const payload = jwt.verify(bearerToken, JWT_SECRET) as JwtPayload;
+      const payload = jwt.verify(bearerToken, JWT_SECRET, { algorithms: ['HS256'] }) as JwtPayload;
       socket.data.tenantId = payload.tenantId;
-      return next();
     }
-
-    return next(new Error('socket auth required'));
   } catch {
-    return next(new Error('socket auth failed'));
+    // token inválido — conecta sem tenantId, não recebe nenhum update
   }
+  return next();
 });
 
 io.on('connection', (socket) => {
@@ -517,7 +560,7 @@ function sanitizeFileName(value: unknown) {
   const raw = String(value || 'arquivo').trim().toLowerCase();
   return raw
     .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[̀-ͯ]/g, '')
     .replace(/[^a-z0-9._-]+/g, '-')
     .replace(/-+/g, '-')
     .replace(/^-|-$/g, '')
@@ -563,8 +606,9 @@ function validateLoginPayload(payload: { email?: unknown; password?: unknown }) 
   if (!EMAIL_REGEX.test(email)) {
     return { ok: false, error: 'Informe um e-mail valido.' } as const;
   }
-  if (!password || password.length < 6) {
-    return { ok: false, error: 'A senha precisa ter no minimo 6 caracteres.' } as const;
+  // FIX [MÉDIO]: Consistência com register — mínimo 8 caracteres
+  if (!password || password.length < 8) {
+    return { ok: false, error: 'A senha precisa ter no minimo 8 caracteres.' } as const;
   }
 
   return { ok: true, value: { email, password } } as const;
@@ -632,7 +676,9 @@ async function sendResetPasswordEmail(to: string, resetLink: string) {
   });
 }
 
+// FIX [MÉDIO]: Limite de tamanho para prevenir ReDoS
 function extractChecklistItems(text: string): string[] {
+  if (text.length > 10000) return [];
   const normalized = text
     .replace(/\r/g, '\n')
     .split(/\n|\.\s+|;\s+/)
@@ -651,8 +697,7 @@ app.use('/api/auth/register', rateLimit({ scope: 'auth.register', windowMs: 15 *
 app.use('/api/auth/login', rateLimit({ scope: 'auth.login', windowMs: 15 * 60 * 1000, max: 20 }));
 app.use('/api/auth/forgot-password', rateLimit({ scope: 'auth.forgot_password', windowMs: 60 * 60 * 1000, max: 5 }));
 app.use('/api/auth/reset-password', rateLimit({ scope: 'auth.reset_password', windowMs: 60 * 60 * 1000, max: 10 }));
-app.use('/api/posts/:id/comments', rateLimit({ scope: 'public.comments', windowMs: 10 * 60 * 1000, max: 30 }));
-app.use('/api/posts/:id/status', rateLimit({ scope: 'public.status', windowMs: 10 * 60 * 1000, max: 30 }));
+app.use('/api/public', rateLimit({ scope: 'public.review', windowMs: 10 * 60 * 1000, max: 60 }));
 
 app.get('/', (req, res) => {
   res.json({ message: 'AprovaFlow SaaS API online!' });
@@ -736,7 +781,10 @@ app.post('/api/auth/register', async (req, res) => {
       data: { name, email, passwordHash, tenantId: tenant.id },
     });
 
-    const token = jwt.sign({ userId: user.id, tenantId: tenant.id }, JWT_SECRET, { expiresIn: '7d' });
+    const token = jwt.sign({ userId: user.id, tenantId: tenant.id }, JWT_SECRET, { expiresIn: '7d', algorithm: 'HS256' });
+
+    // FIX [CRÍTICO]: Emitir cookie httpOnly — token nunca mais precisa ficar em localStorage
+    setAuthCookie(res, token);
 
     res.status(201).json({
       user: { id: user.id, name: user.name, email: user.email },
@@ -771,7 +819,11 @@ app.post('/api/auth/login', async (req, res) => {
     const isValid = await bcrypt.compare(password, user.passwordHash);
     if (!isValid) return res.status(401).json({ error: 'Senha incorreta.' });
 
-    const token = jwt.sign({ userId: user.id, tenantId: user.tenantId }, JWT_SECRET, { expiresIn: '7d' });
+    const token = jwt.sign({ userId: user.id, tenantId: user.tenantId }, JWT_SECRET, { expiresIn: '7d', algorithm: 'HS256' });
+
+    // FIX [CRÍTICO]: Emitir cookie httpOnly
+    setAuthCookie(res, token);
+
     res.json({ user: { id: user.id, name: user.name, email: user.email }, token, tenantId: user.tenantId });
   } catch {
     res.status(500).json({ error: 'Erro ao realizar login' });
@@ -786,10 +838,20 @@ app.get('/api/auth/me', async (req, res) => {
     const user = await prisma.user.findUnique({ where: { id: payload.userId } });
     if (!user) return res.status(401).json({ error: 'Usuario nao encontrado' });
 
-    res.json({ user: { id: user.id, name: user.name, email: user.email }, tenantId: user.tenantId });
+    // Renovar cookie a cada /me (sessão deslizante)
+    const token = jwt.sign({ userId: user.id, tenantId: user.tenantId }, JWT_SECRET, { expiresIn: '7d', algorithm: 'HS256' });
+    setAuthCookie(res, token);
+
+    res.json({ user: { id: user.id, name: user.name, email: user.email }, tenantId: user.tenantId, token });
   } catch {
     return res.status(401).json({ error: 'Token invalido' });
   }
+});
+
+// FIX [CRÍTICO]: Endpoint de logout que limpa o cookie httpOnly
+app.post('/api/auth/logout', (req, res) => {
+  res.clearCookie('aprovaflow-token', { path: '/', httpOnly: true });
+  res.json({ ok: true });
 });
 
 app.patch('/api/auth/me', async (req, res) => {
@@ -843,7 +905,7 @@ app.post('/api/auth/forgot-password', async (req, res) => {
 
     const resetToken = crypto.randomBytes(32).toString('hex');
     const resetTokenHash = hashResetToken(resetToken);
-    const expiresAt = new Date(Date.now() + 1000 * 60 * 60); // 1h
+    const expiresAt = new Date(Date.now() + 1000 * 60 * 60);
 
     await prisma.user.update({
       where: { id: user.id },
@@ -905,7 +967,7 @@ app.post('/api/auth/reset-password', async (req, res) => {
 });
 
 app.use('/api', async (req, res, next) => {
-  const exemptPrefixes = ['/auth/', '/billing/', '/ops/health', '/tenantsSettings'];
+  const exemptPrefixes = ['/auth/', '/billing/', '/ops/health', '/public/', '/tenantsSettings'];
   if (exemptPrefixes.some((prefix) => req.path.startsWith(prefix))) return next();
 
   const payload = getTokenPayload(req);
@@ -937,6 +999,125 @@ app.use('/api', async (req, res, next) => {
     return res.status(500).json({ error: 'Erro ao validar acesso por assinatura.' });
   }
 });
+
+// ─── ENDPOINTS PÚBLICOS (sem auth) ────────────────────────────────────────────
+// FIX [CRÍTICO]: Endpoints dedicados para revisão pública — usam publicToken do Post
+// Não exigem autenticação, mas são identificados pelo token único do post
+
+app.get('/api/public/:publicToken', async (req, res) => {
+  try {
+    const post = await prisma.post.findUnique({
+      where: { publicToken: req.params.publicToken },
+      include: {
+        comments: { orderBy: { createdAt: 'asc' } },
+        tasks: { orderBy: { createdAt: 'asc' } },
+        tenant: {
+          select: { name: true, logoUrl: true, themeColor: true },
+        },
+      },
+    });
+    if (!post) return res.status(404).json({ error: 'Link de revisao invalido ou expirado.' });
+
+    // Retorna apenas campos necessários para o cliente — sem tenantId, audit trail, hashes internos
+    const { tenantId: _tid, currentVersionHash: _vh, ...safePost } = post as any;
+    res.json(safePost);
+  } catch {
+    res.status(500).json({ error: 'Erro ao carregar revisao.' });
+  }
+});
+
+app.patch('/api/public/:publicToken/status', async (req, res) => {
+  try {
+    const { status, actorName } = req.body;
+    const normalizedStatus = String(status || '').trim().toUpperCase();
+    if (!['APPROVED', 'ADJUSTMENT', 'PENDING'].includes(normalizedStatus)) {
+      return res.status(400).json({ error: 'Status invalido.' });
+    }
+
+    const post = await prisma.post.findUnique({
+      where: { publicToken: req.params.publicToken },
+    });
+    if (!post) return res.status(404).json({ error: 'Link de revisao invalido.' });
+
+    const updated = await prisma.post.update({
+      where: { id: post.id },
+      data: { status: normalizedStatus },
+    });
+
+    await prisma.approvalEvent.create({
+      data: {
+        postId: post.id,
+        actorName: normalizeText(actorName) || 'Cliente',
+        action: normalizedStatus,
+        postVersion: post.version,
+        versionHash: post.currentVersionHash,
+        ipAddress: getClientIp(req),
+        userAgent: req.headers['user-agent'] || 'unknown',
+        meta: { source: 'api/public/:publicToken/status', publicReview: true },
+      },
+    });
+
+    emitTenantDashboardUpdate(post.tenantId, 'post_status_updated');
+    res.json({ status: updated.status });
+  } catch {
+    res.status(500).json({ error: 'Erro ao atualizar status.' });
+  }
+});
+
+app.post('/api/public/:publicToken/comments', async (req, res) => {
+  try {
+    const { text, author } = req.body;
+    if (!author || !String(author).trim()) {
+      return res.status(400).json({ error: 'Nome do aprovador e obrigatorio' });
+    }
+    if (!text || !String(text).trim()) {
+      return res.status(400).json({ error: 'Comentario obrigatorio' });
+    }
+
+    const post = await prisma.post.findUnique({
+      where: { publicToken: req.params.publicToken },
+    });
+    if (!post) return res.status(404).json({ error: 'Link de revisao invalido.' });
+
+    const normalizedText = String(text).trim().slice(0, 5000);
+    const normalizedAuthor = String(author).trim().slice(0, 80);
+
+    const comment = await prisma.comment.create({
+      data: { text: normalizedText, author: normalizedAuthor, postId: post.id, actionType: 'COMMENT' },
+    });
+
+    const checklist = extractChecklistItems(normalizedText);
+    if (checklist.length > 0) {
+      await prisma.taskItem.createMany({
+        data: checklist.map((title) => ({
+          postId: post.id,
+          title,
+          sourceCommentId: comment.id,
+        })),
+      });
+    }
+
+    await prisma.approvalEvent.create({
+      data: {
+        postId: post.id,
+        actorName: normalizedAuthor,
+        action: 'COMMENT',
+        postVersion: post.version,
+        versionHash: post.currentVersionHash,
+        ipAddress: getClientIp(req),
+        userAgent: req.headers['user-agent'] || 'unknown',
+        meta: { source: 'api/public/:publicToken/comments', publicReview: true },
+      },
+    });
+
+    emitTenantDashboardUpdate(post.tenantId, 'post_comment_created');
+    return res.status(201).json(comment);
+  } catch {
+    return res.status(500).json({ error: 'Erro ao registrar comentario.' });
+  }
+});
+
+// ─── ENDPOINTS AUTENTICADOS ────────────────────────────────────────────────────
 
 app.post('/api/ai/improve-copy', async (req, res) => {
   const auth = await resolveCurrentTenantFromAuth(req);
@@ -1052,8 +1233,18 @@ app.get('/api/tenantsSettings', async (req, res) => {
     if (!tenant) return res.status(404).json({ error: 'Agencia nao encontrada' });
     const plan = normalizeTenantPlan((tenant as any).plan, tenant.isPro);
     const hasActiveSubscription = isSubscriptionActiveStatus(tenant.stripeSubscriptionStatus);
+    // FIX [ALTO]: Não expor IDs internos do Stripe ao frontend
     res.json({
-      ...tenant,
+      id: tenant.id,
+      name: tenant.name,
+      logoUrl: tenant.logoUrl,
+      themeColor: tenant.themeColor,
+      customDomain: tenant.customDomain,
+      billingRequired: tenant.billingRequired,
+      stripeSubscriptionStatus: tenant.stripeSubscriptionStatus,
+      stripeCurrentPeriodEnd: tenant.stripeCurrentPeriodEnd,
+      createdAt: tenant.createdAt,
+      updatedAt: tenant.updatedAt,
       plan,
       isPro: plan === 'PRO',
       hasActiveSubscription,
@@ -1093,14 +1284,27 @@ app.patch('/api/tenantsSettings', async (req, res) => {
     const plan = normalizeTenantPlan((updated as any).plan, updated.isPro);
     const hasActiveSubscription = isSubscriptionActiveStatus(updated.stripeSubscriptionStatus);
     res.json({
-      ...updated,
+      id: updated.id,
+      name: updated.name,
+      logoUrl: updated.logoUrl,
+      themeColor: updated.themeColor,
+      customDomain: updated.customDomain,
+      billingRequired: updated.billingRequired,
+      stripeSubscriptionStatus: updated.stripeSubscriptionStatus,
+      stripeCurrentPeriodEnd: updated.stripeCurrentPeriodEnd,
+      createdAt: updated.createdAt,
+      updatedAt: updated.updatedAt,
       plan,
       isPro: plan === 'PRO',
       hasActiveSubscription,
       canAccessApp: canTenantAccessApp(updated),
     });
-  } catch (e) {
-    console.error('ERRO NO PATCH TENANT:', e);
+  } catch (error) {
+    await reportBackendError({
+      scope: 'tenant.settings_update',
+      error,
+      meta: { tenantId: getTokenPayload(req)?.tenantId || '' },
+    });
     res.status(500).json({ error: 'Erro ao atualizar configuracoes da agencia' });
   }
 });
@@ -1325,10 +1529,7 @@ app.get('/api/billing/status', async (req, res) => {
         id: true,
         plan: true,
         isPro: true,
-        stripeCustomerId: true,
-        stripeSubscriptionId: true,
         stripeSubscriptionStatus: true,
-        stripePriceId: true,
         stripeCurrentPeriodEnd: true,
         billingRequired: true,
       },
@@ -1337,6 +1538,8 @@ app.get('/api/billing/status', async (req, res) => {
 
     const normalizedPlan = normalizeTenantPlan(tenant.plan, tenant.isPro);
     const hasActiveSubscription = isSubscriptionActiveStatus(tenant.stripeSubscriptionStatus);
+
+    // FIX [ALTO]: Não retornar IDs internos do Stripe ao frontend
     return res.json({
       tenantId: tenant.id,
       plan: normalizedPlan,
@@ -1344,10 +1547,7 @@ app.get('/api/billing/status', async (req, res) => {
       billingRequired: Boolean(tenant.billingRequired),
       hasActiveSubscription,
       canAccessApp: canTenantAccessApp(tenant),
-      stripeCustomerId: tenant.stripeCustomerId,
-      stripeSubscriptionId: tenant.stripeSubscriptionId,
       stripeSubscriptionStatus: tenant.stripeSubscriptionStatus,
-      stripePriceId: tenant.stripePriceId,
       stripeCurrentPeriodEnd: tenant.stripeCurrentPeriodEnd,
     });
   } catch (error) {
@@ -1442,8 +1642,12 @@ app.post('/api/posts', async (req, res) => {
   res.status(201).json(post);
 });
 
+// FIX [CRÍTICO]: GET /api/posts/:id agora exige autenticação e verifica tenant
 app.get('/api/posts/:id', async (req, res) => {
   try {
+    const payload = requireAuthPayload(req, res);
+    if (!payload) return;
+
     const post = await prisma.post.findUnique({
       where: { id: req.params.id },
       include: {
@@ -1456,6 +1660,9 @@ app.get('/api/posts/:id', async (req, res) => {
       },
     });
     if (!post) return res.status(404).json({ error: 'Post nao encontrado' });
+    if (post.tenantId !== payload.tenantId) {
+      return res.status(403).json({ error: 'Sem permissao para acessar este projeto.' });
+    }
     res.json(post);
   } catch {
     res.status(500).json({ error: 'Erro ao buscar post' });
@@ -1599,8 +1806,12 @@ app.patch('/api/posts/:id', async (req, res) => {
   }
 });
 
+// FIX [CRÍTICO]: PATCH /api/posts/:id/status agora exige autenticação — clientes usam /api/public/:token/status
 app.patch('/api/posts/:id/status', async (req, res) => {
   try {
+    const payload = requireAuthPayload(req, res);
+    if (!payload) return;
+
     const { status, actorName } = req.body;
     const normalizedStatus = String(status || '').trim().toUpperCase();
     if (!['PENDING', 'APPROVED', 'ADJUSTMENT'].includes(normalizedStatus)) {
@@ -1609,12 +1820,7 @@ app.patch('/api/posts/:id/status', async (req, res) => {
 
     const existing = await prisma.post.findUnique({ where: { id: req.params.id } });
     if (!existing) return res.status(404).json({ error: 'Post nao encontrado' });
-
-    const payload = getTokenPayload(req);
-    if (!payload && !['APPROVED', 'ADJUSTMENT'].includes(normalizedStatus)) {
-      return res.status(403).json({ error: 'Acao nao permitida no link publico.' });
-    }
-    if (payload && existing.tenantId !== payload.tenantId) {
+    if (existing.tenantId !== payload.tenantId) {
       return res.status(403).json({ error: 'Sem permissao para alterar este projeto.' });
     }
 
@@ -1626,13 +1832,13 @@ app.patch('/api/posts/:id/status', async (req, res) => {
     await prisma.approvalEvent.create({
       data: {
         postId: post.id,
-        actorName: normalizeText(actorName) || (payload ? 'Agency' : 'Cliente'),
+        actorName: normalizeText(actorName) || 'Agency',
         action: normalizedStatus,
         postVersion: post.version,
         versionHash: post.currentVersionHash,
         ipAddress: getClientIp(req),
         userAgent: req.headers['user-agent'] || 'unknown',
-        meta: { source: 'api/posts/:id/status', publicReview: !payload },
+        meta: { source: 'api/posts/:id/status', publicReview: false },
       },
     });
 
@@ -1697,6 +1903,9 @@ app.delete('/api/posts/:id', async (req, res) => {
 });
 
 app.post('/api/posts/:id/comments', async (req, res) => {
+  const payload = requireAuthPayload(req, res);
+  if (!payload) return;
+
   const { text, author, action } = req.body;
   if (!author || !String(author).trim()) {
     return res.status(400).json({ error: 'Nome do aprovador e obrigatorio' });
@@ -1705,16 +1914,18 @@ app.post('/api/posts/:id/comments', async (req, res) => {
     return res.status(400).json({ error: 'Comentario obrigatorio' });
   }
 
-  const normalizedText = String(text).trim();
-  const normalizedAuthor = String(author).trim();
+  const normalizedText = String(text).trim().slice(0, 5000);
+  const normalizedAuthor = String(author).trim().slice(0, 80);
   const normalizedAction = String(action || 'comment').trim().toUpperCase();
   if (!['COMMENT', 'APPROVED', 'ADJUSTMENT', 'CHANGES_REQUESTED'].includes(normalizedAction)) {
     return res.status(400).json({ error: 'Acao invalida.' });
   }
-  const eventAction = 'COMMENT';
 
   const post = await prisma.post.findUnique({ where: { id: req.params.id } });
   if (!post) return res.status(404).json({ error: 'Post nao encontrado' });
+  if (post.tenantId !== payload.tenantId) {
+    return res.status(403).json({ error: 'Sem permissao para comentar neste projeto.' });
+  }
 
   const comment = await prisma.comment.create({
     data: { text: normalizedText, author: normalizedAuthor, postId: req.params.id, actionType: normalizedAction },
@@ -1735,7 +1946,7 @@ app.post('/api/posts/:id/comments', async (req, res) => {
     data: {
       postId: req.params.id,
       actorName: normalizedAuthor,
-      action: eventAction,
+      action: 'COMMENT',
       postVersion: post.version,
       versionHash: post.currentVersionHash,
       ipAddress: getClientIp(req),

@@ -4,6 +4,7 @@ import { io } from 'socket.io-client'
 import { ChevronLeft, ChevronRight, ExternalLink, FileText, Link2, Menu, Pencil, Trash2, Video } from 'lucide-react'
 import StatusBadge from '../components/ui/StatusBadge'
 import { deletePostById, listPosts } from '../services/reviewService'
+import api from '../services/api'
 import { isVideoAsset } from '../services/storageService'
 
 const ITEMS_PER_PAGE = 10
@@ -44,9 +45,10 @@ function Projects() {
   useEffect(() => {
     const rawApi = import.meta.env.VITE_API_URL || 'http://localhost:3000/api'
     const socketUrl = rawApi.replace(/\/api\/?$/, '')
-    const token = localStorage.getItem('aprovaflow-token')
+    const token = api.defaults.headers.common.Authorization?.replace('Bearer ', '') || null
     const socket = io(socketUrl, {
       transports: ['websocket'],
+      withCredentials: true,
       auth: { token },
     })
 

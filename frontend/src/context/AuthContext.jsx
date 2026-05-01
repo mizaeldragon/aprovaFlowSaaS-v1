@@ -55,7 +55,6 @@ async function loadTenantSettings() {
 }
 
 export function AuthProvider({ children }) {
-  const hasToken = Boolean(localStorage.getItem('aprovaflow-token'));
   const [user, setUser] = useState(null);
   const [tenant, setTenant] = useState({
     logoUrl: null,
@@ -67,29 +66,28 @@ export function AuthProvider({ children }) {
     hasActiveSubscription: false,
     canAccessApp: true,
   });
-  const [loading, setLoading] = useState(hasToken);
+  // Sempre começa carregando — cookie httpOnly não é visível ao JS
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const token = localStorage.getItem('aprovaflow-token');
-    if (!token) return;
-
-    api.defaults.headers.common.Authorization = `Bearer ${token}`;
-
+    // FIX [CRÍTICO]: Sem localStorage — autenticação via cookie httpOnly (enviado automaticamente pelo axios withCredentials)
     api
       .get('/auth/me')
       .then(async (res) => {
         setUser(res.data.user);
-        localStorage.setItem('aprovaflow-tenant', res.data.tenantId);
+        // Mantém token em memória para uso com Socket.io (não em localStorage)
+        if (res.data.token) {
+          api.defaults.headers.common.Authorization = `Bearer ${res.data.token}`;
+        }
         try {
           const tenantData = await loadTenantSettings();
           if (tenantData) setTenant(tenantData);
         } catch {
-          // Mantem fluxo sem bloquear login quando settings falhar.
+          // Mantém fluxo sem bloquear login quando settings falhar.
         }
       })
       .catch(() => {
-        localStorage.removeItem('aprovaflow-token');
-        localStorage.removeItem('aprovaflow-tenant');
+        // Sessão expirada ou não existe — limpa header se havia algum
         delete api.defaults.headers.common.Authorization;
       })
       .finally(() => setLoading(false));
@@ -101,10 +99,12 @@ export function AuthProvider({ children }) {
 
   const login = async (email, password) => {
     const res = await api.post('/auth/login', { email, password });
-    const { token, user: nextUser, tenantId } = res.data;
-    localStorage.setItem('aprovaflow-token', token);
-    localStorage.setItem('aprovaflow-tenant', tenantId);
-    api.defaults.headers.common.Authorization = `Bearer ${token}`;
+    const { user: nextUser } = res.data;
+    // FIX [CRÍTICO]: Token nunca vai para localStorage — cookie httpOnly já foi setado pelo backend
+    // Mantém em memória apenas para Socket.io
+    if (res.data.token) {
+      api.defaults.headers.common.Authorization = `Bearer ${res.data.token}`;
+    }
     setUser(nextUser);
     try {
       const tenantData = await loadTenantSettings();
@@ -117,10 +117,11 @@ export function AuthProvider({ children }) {
 
   const register = async (name, email, password, agencyName) => {
     const res = await api.post('/auth/register', { name, email, password, agencyName });
-    const { token, user: nextUser, tenantId } = res.data;
-    localStorage.setItem('aprovaflow-token', token);
-    localStorage.setItem('aprovaflow-tenant', tenantId);
-    api.defaults.headers.common.Authorization = `Bearer ${token}`;
+    const { user: nextUser } = res.data;
+    // FIX [CRÍTICO]: Token nunca vai para localStorage
+    if (res.data.token) {
+      api.defaults.headers.common.Authorization = `Bearer ${res.data.token}`;
+    }
     setUser(nextUser);
     try {
       const tenantData = await loadTenantSettings();
@@ -131,9 +132,13 @@ export function AuthProvider({ children }) {
     return nextUser;
   };
 
-  const logout = () => {
-    localStorage.removeItem('aprovaflow-token');
-    localStorage.removeItem('aprovaflow-tenant');
+  const logout = async () => {
+    try {
+      // FIX [CRÍTICO]: Limpa o cookie httpOnly no servidor
+      await api.post('/auth/logout');
+    } catch {
+      // ignora falha de rede no logout
+    }
     delete api.defaults.headers.common.Authorization;
     setUser(null);
     setTenant({
