@@ -420,6 +420,9 @@ const io = new Server(httpServer, {
     },
     credentials: true,
   },
+  transports: ['polling', 'websocket'],
+  pingTimeout: 60000,
+  pingInterval: 25000,
 });
 
 type JwtPayload = { userId: string; tenantId: string };

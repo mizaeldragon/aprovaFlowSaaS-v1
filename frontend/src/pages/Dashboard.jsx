@@ -141,7 +141,7 @@ function Dashboard() {
     const socketUrl = rawApi.replace(/\/api\/?$/, '')
     const token = api.defaults.headers.common.Authorization?.replace('Bearer ', '') || null
     const socket = io(socketUrl, {
-      transports: ['websocket'],
+      transports: ['polling', 'websocket'],
       withCredentials: true,
       auth: { token },
     })
