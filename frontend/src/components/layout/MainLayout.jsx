@@ -290,7 +290,7 @@ function MainLayout({ children }) {
                         <img src={tenant.logoUrl} alt="Avatar Logo" className="w-full h-full object-cover bg-white" />
                       ) : (
                         <span className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-cyan-500/60 bg-cyan-500/10 text-cyan-300 font-bold">
-                          {getInitial(user.name)}
+                          {getInitial(tenant?.name || user.name)}
                         </span>
                       )}
                     </div>
@@ -301,10 +301,10 @@ function MainLayout({ children }) {
                     <div className="absolute right-0 top-14 z-[90] w-72 rounded-2xl border border-cyan-900/40 bg-[#0c121c] p-3 shadow-[0_30px_90px_-30px_rgba(0,0,0,0.95)]">
                       <div className="mb-2 flex items-center gap-3 rounded-xl border border-slate-800 bg-slate-900/60 p-3">
                         <div className="h-9 w-9 rounded-full border border-cyan-500/40 bg-cyan-500/10 flex items-center justify-center text-cyan-300 font-bold">
-                          {getInitial(user.name)}
+                          {getInitial(tenant?.name || user.name)}
                         </div>
                         <div className="min-w-0">
-                          <p className="truncate text-sm font-extrabold text-white">{user.name}</p>
+                          <p className="truncate text-sm font-extrabold text-white">{tenant?.name || user.name}</p>
                         </div>
                       </div>
 
