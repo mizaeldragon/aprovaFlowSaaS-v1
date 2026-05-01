@@ -1564,16 +1564,21 @@ app.get('/api/posts', async (req, res) => {
   const payload = requireAuthPayload(req, res);
   if (!payload) return;
 
-  const posts = await prisma.post.findMany({
-    where: { tenantId: payload.tenantId },
-    orderBy: { createdAt: 'desc' },
-    include: {
-      comments: { orderBy: { createdAt: 'asc' } },
-      tasks: { orderBy: { createdAt: 'asc' } },
-      approvalEvents: { orderBy: { createdAt: 'desc' } },
-    },
-  });
-  res.json(posts);
+  try {
+    const posts = await prisma.post.findMany({
+      where: { tenantId: payload.tenantId },
+      orderBy: { createdAt: 'desc' },
+      include: {
+        comments: { orderBy: { createdAt: 'asc' } },
+        tasks: { orderBy: { createdAt: 'asc' } },
+        approvalEvents: { orderBy: { createdAt: 'desc' } },
+      },
+    });
+    res.json(posts);
+  } catch (err) {
+    console.error('[GET /api/posts] Prisma error:', err);
+    res.status(500).json({ error: 'Erro ao buscar projetos.' });
+  }
 });
 
 app.post('/api/posts', async (req, res) => {
