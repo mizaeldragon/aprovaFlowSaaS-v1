@@ -148,7 +148,7 @@ export default function AuthPage() {
         <div className="pointer-events-none absolute -bottom-20 left-1/2 h-40 w-[85%] -translate-x-1/2 rounded-full bg-[#00E5FF]/18 blur-3xl" />
 
         <div className="mb-6 flex flex-col items-center text-center">
-          <img src="/apv-logo.png" alt="AprovaFlow Logo" className="mb-6 h-11 w-auto" />
+          <img src="/apv-logo.png" alt="AprovaFluxo Logo" className="mb-6 h-20 w-auto" />
           <h2 className="text-2xl font-bold tracking-tight text-slate-100">
             {tab === 'login' ? 'Faca login na sua conta' : 'Crie seu workspace'}
           </h2>

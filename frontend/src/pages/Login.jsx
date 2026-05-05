@@ -56,7 +56,7 @@ export default function Login() {
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_15%_20%,rgba(0,229,255,0.20),transparent_38%),radial-gradient(circle_at_90%_5%,rgba(0,184,255,0.14),transparent_45%)]" />
       <div className="relative z-10 w-full max-w-md rounded-3xl border border-[#00E5FF]/28 bg-[#04122A]/95 p-8 shadow-[0_20px_60px_rgba(2,12,27,0.75)]">
         <div className="mb-8 flex flex-col items-center text-center">
-          <img src="/apv-logo.png" alt="AprovaFlow Logo" className="mb-6 h-11 w-auto" />
+          <img src="/apv-logo.png" alt="AprovaFluxo Logo" className="mb-6 h-20 w-auto" />
           <h2 className="text-2xl font-bold tracking-tight text-slate-100">Bem-vindo de volta</h2>
           <p className="mt-2 text-sm text-slate-400">Acesse o painel da sua agencia.</p>
         </div>

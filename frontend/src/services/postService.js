@@ -1,4 +1,4 @@
-const STORAGE_KEY = 'aprovaflow.posts'
+const STORAGE_KEY = 'aprovaFluxo.posts'
 
 const defaultPosts = [
   {

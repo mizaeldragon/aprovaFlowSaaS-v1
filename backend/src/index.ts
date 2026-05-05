@@ -35,7 +35,7 @@ const STRIPE_PRICE_STARTER_MONTHLY = String(process.env.STRIPE_PRICE_STARTER_MON
 const STRIPE_PRICE_STARTER_YEARLY = String(process.env.STRIPE_PRICE_STARTER_YEARLY || '').trim();
 const STRIPE_PRICE_PRO_MONTHLY = String(process.env.STRIPE_PRICE_PRO_MONTHLY || '').trim();
 const STRIPE_PRICE_PRO_YEARLY = String(process.env.STRIPE_PRICE_PRO_YEARLY || '').trim();
-const CUSTOM_DOMAIN_CNAME_TARGET = String(process.env.CUSTOM_DOMAIN_CNAME_TARGET || 'lb.aprovaflow.com').trim().toLowerCase();
+const CUSTOM_DOMAIN_CNAME_TARGET = String(process.env.CUSTOM_DOMAIN_CNAME_TARGET || 'lb.aprovafluxo.com').trim().toLowerCase();
 const OPS_ALERT_WEBHOOK_URL = String(process.env.OPS_ALERT_WEBHOOK_URL || '').trim();
 const SUPABASE_URL = String(process.env.SUPABASE_URL || '').trim();
 const SUPABASE_SERVICE_ROLE_KEY = String(process.env.SUPABASE_SERVICE_ROLE_KEY || '').trim();
@@ -439,13 +439,13 @@ function emitTenantDashboardUpdate(tenantId?: string | null, reason = 'updated')
 // FIX [CRÍTICO]: Leitura de cookie httpOnly para auth
 function parseTokenFromCookies(cookieHeader: string | undefined): string | null {
   if (!cookieHeader) return null;
-  const match = cookieHeader.match(/(?:^|;\s*)aprovaflow-token=([^;]+)/);
+  const match = cookieHeader.match(/(?:^|;\s*)aprovaFluxo-token=([^;]+)/);
   return match ? decodeURIComponent(match[1]) : null;
 }
 
 // FIX [CRÍTICO]: Emitir cookie httpOnly no login/register
 function setAuthCookie(res: express.Response, token: string) {
-  res.cookie('aprovaflow-token', token, {
+  res.cookie('aprovaFluxo-token', token, {
     httpOnly: true,
     secure: IS_PRODUCTION,
     sameSite: IS_PRODUCTION ? 'none' : 'lax',
@@ -661,7 +661,7 @@ async function sendResetPasswordEmail(to: string, resetLink: string) {
   await transporter.sendMail({
     from,
     to,
-    subject: 'AprovaFlow | Redefinicao de senha',
+    subject: 'AprovaFluxo | Redefinicao de senha',
     html: `
       <div style="font-family: Arial, sans-serif; line-height:1.5; color:#0f172a;">
         <h2>Redefinicao de senha</h2>
@@ -703,7 +703,7 @@ app.use('/api/auth/reset-password', rateLimit({ scope: 'auth.reset_password', wi
 app.use('/api/public', rateLimit({ scope: 'public.review', windowMs: 10 * 60 * 1000, max: 60 }));
 
 app.get('/', (req, res) => {
-  res.json({ message: 'AprovaFlow SaaS API online!' });
+  res.json({ message: 'AprovaFluxo SaaS API online!' });
 });
 
 app.get('/api/ops/health', (req, res) => {
@@ -853,7 +853,7 @@ app.get('/api/auth/me', async (req, res) => {
 
 // FIX [CRÍTICO]: Endpoint de logout que limpa o cookie httpOnly
 app.post('/api/auth/logout', (req, res) => {
-  res.clearCookie('aprovaflow-token', { path: '/', httpOnly: true });
+  res.clearCookie('aprovaFluxo-token', { path: '/', httpOnly: true });
   res.json({ ok: true });
 });
 

@@ -62,7 +62,7 @@ export default function Settings() {
   const [domainVerification, setDomainVerification] = useState({
     status: 'unknown',
     message: '',
-    expectedTarget: 'lb.aprovaflow.com',
+    expectedTarget: 'lb.aprovafluxo.com',
     resolvedTo: [],
     checkedAt: '',
   });
@@ -141,7 +141,7 @@ export default function Settings() {
       setDomainVerification({
         status: data.status || 'unknown',
         message: data.message || '',
-        expectedTarget: data.expectedTarget || 'lb.aprovaflow.com',
+        expectedTarget: data.expectedTarget || 'lb.aprovafluxo.com',
         resolvedTo: Array.isArray(data.resolvedTo) ? data.resolvedTo : [],
         checkedAt: data.checkedAt || '',
       });
@@ -174,7 +174,7 @@ export default function Settings() {
         setHasActiveSubscription(Boolean(data.hasActiveSubscription));
         setDomainVerification((prev) => ({
           ...prev,
-          expectedTarget: prev.expectedTarget || 'lb.aprovaflow.com',
+          expectedTarget: prev.expectedTarget || 'lb.aprovafluxo.com',
         }));
 
         setCompanyForm({
@@ -579,7 +579,7 @@ export default function Settings() {
                       <span className="h-2.5 w-2.5 rounded-full bg-rose-400/80" />
                       <span className="h-2.5 w-2.5 rounded-full bg-amber-300/80" />
                       <span className="h-2.5 w-2.5 rounded-full bg-emerald-400/80" />
-                      <div className="ml-3 rounded-lg border border-cyan-900/40 bg-[#0c121c] px-3 py-1 text-[11px] font-semibold text-slate-300">{isPro ? customDomain : 'app.aprovaflow.com/review'}</div>
+                      <div className="ml-3 rounded-lg border border-cyan-900/40 bg-[#0c121c] px-3 py-1 text-[11px] font-semibold text-slate-300">{isPro ? customDomain : 'app.aprovafluxo.com/review'}</div>
                     </div>
                     <div className="grid gap-4 p-4 md:grid-cols-[220px_1fr]">
                       <aside className="rounded-2xl border border-cyan-900/30 bg-[#0c121c] p-4">
@@ -627,7 +627,7 @@ export default function Settings() {
                 </div>
                 <p className="rounded-xl border border-cyan-900/30 bg-[#0c121c] p-3 text-xs text-slate-400">
                   Adicione um registro CNAME apontando <span className="font-semibold text-cyan-200">{customDomain || 'portal.suaagencia.com'}</span> para{' '}
-                  <span className="font-semibold text-cyan-200">{domainVerification.expectedTarget || 'lb.aprovaflow.com'}</span> no seu provedor DNS.
+                  <span className="font-semibold text-cyan-200">{domainVerification.expectedTarget || 'lb.aprovafluxo.com'}</span> no seu provedor DNS.
                 </p>
                 {domainVerification.message ? (
                   <p className="rounded-xl border border-slate-700 bg-[#0c121c] p-3 text-xs text-slate-400">

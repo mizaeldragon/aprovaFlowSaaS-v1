@@ -5,7 +5,7 @@ export default function Privacy() {
     <main className="min-h-screen bg-[#0C131D] px-6 py-14 text-slate-200">
       <div className="mx-auto max-w-4xl space-y-8">
         <div className="flex items-center justify-between">
-          <img src="/apv-logo.png" alt="AprovaFlow" className="h-10 w-auto" />
+          <img src="/apv-logo.png" alt="AprovaFluxo" className="h-14 w-auto" />
           <Link to="/" className="text-sm font-semibold text-cyan-300 hover:text-cyan-200">
             Voltar ao site
           </Link>

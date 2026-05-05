@@ -224,7 +224,7 @@ function FloatingDots({ amount = 24, seed = 1, className = '' }) {
 
 export default function Landing() {
   const [showHeader, setShowHeader] = useState(false);
-  const contactEmail = String(import.meta.env.VITE_CONTACT_EMAIL || 'contato@aprovaflow.com').trim();
+  const contactEmail = String(import.meta.env.VITE_CONTACT_EMAIL || 'contato@aprovafluxo.com').trim();
 
   useEffect(() => {
     const onScroll = () => setShowHeader(window.scrollY > 40);
@@ -326,7 +326,7 @@ export default function Landing() {
           }
         >
           <Link to="/" className="flex items-center gap-3">
-            <img src="/apv-logo.png" alt="AprovaFlow" className="h-10 w-auto md:h-12" />
+            <img src="/apv-logo.png" alt="AprovaFluxo" className="h-14 w-auto md:h-16" />
           </Link>
 
           <nav className="hidden items-center gap-8 text-sm font-medium text-slate-300 md:flex">
@@ -685,7 +685,7 @@ export default function Landing() {
         <div className="mx-auto grid max-w-7xl gap-10 px-6 md:grid-cols-[1.8fr_1fr_1fr]">
           <div>
             <div className="flex items-center gap-3">
-              <img src="/apv-logo.png" alt="AprovaFlow" className="h-10 w-auto md:h-12" />
+              <img src="/apv-logo.png" alt="AprovaFluxo" className="h-14 w-auto md:h-16" />
             </div>
             <p className="mt-4 max-w-sm text-lg text-[#a0acc0]">A forma profissional de aprovar conteúdos criativos.</p>
           </div>

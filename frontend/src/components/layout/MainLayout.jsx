@@ -147,7 +147,7 @@ function MainLayout({ children }) {
       <aside className="w-64 bg-[#0c121c] border-r border-slate-800 flex flex-col justify-between shrink-0 h-full overflow-y-auto hidden md:flex">
         <div>
           <div className="h-24 flex items-center px-8 border-b border-[#1E293B]/50">
-            <img src="/apv-logo.png" alt="AprovaFlow" className="h-11 w-auto object-contain" />
+            <img src="/apv-logo.png" alt="AprovaFluxo" className="h-14 w-auto object-contain" />
           </div>
 
           <nav className="mt-8 px-4 space-y-1.5 flex flex-col">
