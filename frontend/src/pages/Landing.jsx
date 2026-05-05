@@ -422,7 +422,7 @@ export default function Landing() {
               <div className="rounded-[16px] bg-[#060f18] p-2 shadow-[inset_0_0_0_1px_rgba(148,163,184,0.12)]">
                 <img
                   src="/mac-aprova.png"
-                  alt="Preview AprovaFlow"
+                  alt="Preview AprovaFluxo"
                   className="h-[340px] w-full rounded-[12px] object-cover object-top md:h-[420px]"
                 />
               </div>
@@ -515,7 +515,7 @@ export default function Landing() {
 
         <section className="mx-auto max-w-7xl px-6 py-12 text-center">
           <h2 className="text-2xl font-black tracking-[-0.01em] text-white md:text-4xl">
-            Para <span className="text-[#00E5FF]">quem</span> é o AprovaFlow
+            Para <span className="text-[#00E5FF]">quem</span> é o AprovaFluxo
           </h2>
 
           <div className="relative mt-10 hidden h-[620px] md:block">
@@ -623,7 +623,7 @@ export default function Landing() {
 
                 {plan.name === 'Enterprise' ? (
                   <a
-                    href={`mailto:${contactEmail}?subject=${encodeURIComponent('AprovaFlow Enterprise')}`}
+                    href={`mailto:${contactEmail}?subject=${encodeURIComponent('AprovaFluxo Enterprise')}`}
                     className="mt-6 inline-flex w-full items-center justify-center rounded-xl px-4 py-3 text-sm font-black"
                     style={{
                       backgroundImage: 'linear-gradient(135deg,rgba(0,229,255,0.22) 0%,rgba(0,229,255,0.12) 100%)',
@@ -710,7 +710,7 @@ export default function Landing() {
         </div>
 
         <div className="mx-auto mt-12 flex max-w-7xl items-center justify-between border-t border-slate-800/70 px-6 pt-8 text-sm text-[#8394ab]">
-          <span>© 2026 AprovaFlow. Todos os direitos reservados.</span>
+          <span>© 2026 AprovaFluxo. Todos os direitos reservados.</span>
           <div className="flex gap-5">
             <Link to="/termos" className="hover:text-[#00E5FF]">Termos</Link>
             <Link to="/privacidade" className="hover:text-[#00E5FF]">Privacidade</Link>

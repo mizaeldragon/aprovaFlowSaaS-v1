@@ -18,7 +18,7 @@ export default function Privacy() {
 
         <section className="space-y-4 text-sm leading-7 text-slate-300">
           <p>Coletamos dados necessários para autenticação, faturamento e operação da plataforma, como nome, e-mail, informações da empresa e dados técnicos de uso.</p>
-          <p>Os pagamentos são processados pelo Stripe. O AprovaFlow não armazena dados completos de cartão. Utilizamos provedores terceiros para infraestrutura, envio de e-mails e monitoramento.</p>
+          <p>Os pagamentos são processados pelo Stripe. O AprovaFluxo não armazena dados completos de cartão. Utilizamos provedores terceiros para infraestrutura, envio de e-mails e monitoramento.</p>
           <p>Seus dados são usados para prestação do serviço, segurança, suporte e melhoria contínua do produto. Não vendemos dados pessoais.</p>
           <p>Você pode solicitar atualização ou remoção de dados conforme legislação aplicável, observando obrigações legais e retenções mínimas de segurança e auditoria.</p>
           <p>Adotamos medidas técnicas e organizacionais para proteger informações contra acesso não autorizado, alteração ou perda.</p>

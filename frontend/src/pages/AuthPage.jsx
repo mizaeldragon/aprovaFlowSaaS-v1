@@ -153,7 +153,7 @@ export default function AuthPage() {
             {tab === 'login' ? 'Faca login na sua conta' : 'Crie seu workspace'}
           </h2>
           <p className="mt-2 text-sm text-slate-400">
-            {tab === 'login' ? 'Bem-vindo de volta ao AprovaFlow.' : 'Transforme a rotina da sua agencia.'}
+            {tab === 'login' ? 'Bem-vindo de volta ao AprovaFluxo.' : 'Transforme a rotina da sua agencia.'}
           </p>
         </div>
 

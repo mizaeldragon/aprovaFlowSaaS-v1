@@ -1,8 +1,8 @@
-# Evolucao do AprovaFlow para SaaS (PostgreSQL + IA)
+# Evolucao do AprovaFluxo para SaaS (PostgreSQL + IA)
 
 Objetivo: transformar o MVP em um SaaS escalavel com backend Node.js + Prisma + PostgreSQL e recursos de IA para aumentar produtividade.
 
-## 1. IA no AprovaFlow
+## 1. IA no AprovaFluxo
 
 A IA agrega valor real no fluxo de aprovacao:
 

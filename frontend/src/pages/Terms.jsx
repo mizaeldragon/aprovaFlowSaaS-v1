@@ -17,7 +17,7 @@ export default function Terms() {
         </header>
 
         <section className="space-y-4 text-sm leading-7 text-slate-300">
-          <p>Ao utilizar o AprovaFlow, você concorda com estes termos. O serviço é destinado à gestão de aprovações criativas, com histórico de decisões e colaboração entre equipes e clientes.</p>
+          <p>Ao utilizar o AprovaFluxo, você concorda com estes termos. O serviço é destinado à gestão de aprovações criativas, com histórico de decisões e colaboração entre equipes e clientes.</p>
           <p>Você é responsável pelas credenciais de acesso, pelo conteúdo enviado à plataforma e pelo uso adequado da conta da sua empresa. É proibido usar o sistema para atividades ilícitas, abuso de infraestrutura ou violação de direitos de terceiros.</p>
           <p>Os planos pagos são cobrados conforme a assinatura ativa no Stripe. Cancelamentos seguem as regras do ciclo vigente. Em caso de inadimplência, o acesso pode ser suspenso até regularização.</p>
           <p>Podemos atualizar funcionalidades, limites e integrações para manter segurança e evolução do produto. Alterações relevantes de contrato serão publicadas nesta página.</p>

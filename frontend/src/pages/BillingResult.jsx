@@ -93,7 +93,7 @@ export default function BillingResult() {
     }
     return {
       title: 'Validando assinatura',
-      description: 'Estamos sincronizando o retorno do Stripe com o AprovaFlow.',
+      description: 'Estamos sincronizando o retorno do Stripe com o AprovaFluxo.',
     };
   }, [status, errorMessage]);
 
