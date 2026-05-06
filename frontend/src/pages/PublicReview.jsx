@@ -133,7 +133,7 @@ function PublicReview() {
 
   // Identidade White-label (Fallback para o verde da plataforma)
   const isApproved = post.status === 'approved'
-  const brandColor = post?.tenant?.themeColor || '#059669'
+  const brandColor = post?.tenant?.themeColor || '#709BFF'
   const agencyLogo = post?.tenant?.logoUrl || ''
   const agencyName = post?.tenant?.name || 'Agência'
 

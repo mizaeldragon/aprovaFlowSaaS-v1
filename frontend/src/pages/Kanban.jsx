@@ -8,6 +8,7 @@ function Kanban() {
   const [searchParams] = useSearchParams()
   const [posts, setPosts] = useState([])
   const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState(null)
   const clientFilter = String(searchParams.get('client') || '').trim().toLowerCase()
 
   useEffect(() => {
@@ -15,8 +16,8 @@ function Kanban() {
       try {
         const res = await api.get('/posts')
         setPosts(res.data)
-      } catch (err) {
-        console.error('Erro ao carregar obras para o Kanban:', err)
+      } catch {
+        setError('Erro ao carregar projetos. Recarregue a página.')
       } finally {
         setIsLoading(false)
       }
@@ -39,6 +40,10 @@ function Kanban() {
 
   if (isLoading) {
     return <div className="flex h-[60vh] items-center justify-center animate-pulse text-slate-500 font-bold uppercase tracking-widest text-xs">Sincronizando Fluxo...</div>
+  }
+
+  if (error) {
+    return <div className="flex h-[60vh] items-center justify-center text-rose-400 text-sm font-semibold">{error}</div>
   }
 
   return (

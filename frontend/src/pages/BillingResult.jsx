@@ -46,11 +46,11 @@ export default function BillingResult() {
         }
 
         attempts += 1;
-        if (attempts >= 6) {
+        if (attempts >= 4) {
           setStatus('pending_webhook');
           return;
         }
-        timer = window.setTimeout(loadBillingStatus, 3000);
+        timer = window.setTimeout(loadBillingStatus, 2000);
       } catch (error) {
         if (cancelled) return;
         setErrorMessage(error?.response?.data?.error || 'Nao foi possivel confirmar o status da assinatura.');

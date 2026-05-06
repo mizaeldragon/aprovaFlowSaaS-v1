@@ -42,6 +42,8 @@ model User {
   tenantId     String
   tenant       Tenant   @relation(fields: [tenantId], references: [id])
   createdAt    DateTime @default(now())
+
+  @@index([tenantId])
 }
 
 model Post {
@@ -71,6 +73,10 @@ model Post {
   comments       Comment[]
   tasks          TaskItem[]
   approvalEvents ApprovalEvent[]
+
+  @@index([tenantId])
+  @@index([status])
+  @@index([dueAt])
 }
 
 model Comment {
@@ -81,6 +87,8 @@ model Comment {
   postId     String
   post       Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
   createdAt  DateTime @default(now())
+
+  @@index([postId])
 }
 
 model TaskItem {
@@ -95,15 +103,18 @@ model TaskItem {
 }
 
 model ApprovalEvent {
-  id          String   @id @default(uuid())
-  postId      String
-  post        Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
-  actorName   String
-  action      String
-  postVersion Int
-  versionHash String?
-  ipAddress   String?
-  userAgent   String?
-  meta        Json?
-  createdAt   DateTime @default(now())
+  id           String   @id @default(uuid())
+  postId       String
+  post         Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  actorName    String
+  action       String
+  postVersion  Int
+  versionHash  String?
+  ipAddress    String?
+  userAgent    String?
+  publicReview Boolean  @default(false)
+  meta         Json?
+  createdAt    DateTime @default(now())
+
+  @@index([postId])
 }

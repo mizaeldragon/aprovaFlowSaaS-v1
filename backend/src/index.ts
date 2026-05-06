@@ -1056,7 +1056,8 @@ app.patch('/api/public/:publicToken/status', async (req, res) => {
         versionHash: post.currentVersionHash,
         ipAddress: getClientIp(req),
         userAgent: req.headers['user-agent'] || 'unknown',
-        meta: { source: 'api/public/:publicToken/status', publicReview: true },
+        publicReview: true,
+        meta: { source: 'api/public/:publicToken/status' },
       },
     });
 
@@ -1109,7 +1110,8 @@ app.post('/api/public/:publicToken/comments', async (req, res) => {
         versionHash: post.currentVersionHash,
         ipAddress: getClientIp(req),
         userAgent: req.headers['user-agent'] || 'unknown',
-        meta: { source: 'api/public/:publicToken/comments', publicReview: true },
+        publicReview: true,
+        meta: { source: 'api/public/:publicToken/comments' },
       },
     });
 
@@ -1579,7 +1581,7 @@ app.get('/api/posts', async (req, res) => {
     });
     res.json(posts);
   } catch (err) {
-    console.error('[GET /api/posts] Prisma error:', err);
+    await reportBackendError({ scope: 'api.get_posts', error: err });
     res.status(500).json({ error: 'Erro ao buscar projetos.' });
   }
 });

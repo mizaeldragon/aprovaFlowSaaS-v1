@@ -15,6 +15,7 @@ function Customers() {
   const navigate = useNavigate()
   const [clients, setClients] = useState([])
   const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState(null)
   const [segment, setSegment] = useState('all')
   const [isSegmentOpen, setIsSegmentOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
@@ -64,8 +65,8 @@ function Customers() {
         })
 
         setClients(Object.values(clientMap))
-      } catch (err) {
-        console.error('Erro ao processar clientes:', err)
+      } catch {
+        setError('Erro ao carregar clientes. Recarregue a página.')
       } finally {
         setIsLoading(false)
       }
@@ -117,6 +118,10 @@ function Customers() {
 
   if (isLoading) {
     return <div className="flex h-[60vh] items-center justify-center animate-pulse text-slate-500 font-bold uppercase tracking-widest text-xs">Mapeando ecossistema...</div>
+  }
+
+  if (error) {
+    return <div className="flex h-[60vh] items-center justify-center text-rose-400 text-sm font-semibold">{error}</div>
   }
 
   return (

@@ -109,8 +109,7 @@ function CopyAI() {
     try {
       const res = await improveCopyWithAI(caption, tone)
       setResult(res.improvedCopy)
-    } catch (err) {
-      console.error('Erro na IA:', err)
+    } catch {
       setResult('Ops! O cérebro da nossa IA cansou um pouco. Tente novamente em instantes.')
     } finally {
       setIsGenerating(false)
