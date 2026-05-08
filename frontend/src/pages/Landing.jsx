@@ -144,7 +144,7 @@ const testimonials = [
 const pricingPlans = [
   {
     name: 'Starter',
-    price: 'R$ 19,90',
+    price: 'R$ 47,90',
     period: '/mês',
     description: 'Para freelancers e pequenas operações.',
     featured: false,
@@ -158,7 +158,7 @@ const pricingPlans = [
   },
   {
     name: 'Pro',
-    price: 'R$ 69,90',
+    price: 'R$ 97,90',
     period: '/mês',
     description: 'Plano ideal para agências em crescimento.',
     featured: true,
