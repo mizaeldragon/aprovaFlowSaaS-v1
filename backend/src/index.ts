@@ -1609,6 +1609,32 @@ app.post('/api/posts', async (req, res) => {
   if (!normalizeText(channel)) return res.status(400).json({ error: 'Canal obrigatorio.' });
   if (!normalizeText(imageUrl)) return res.status(400).json({ error: 'Midia obrigatoria.' });
 
+  if (!hasProAccess(tenant)) {
+    const [activeCount, existingClients] = await Promise.all([
+      prisma.post.count({
+        where: {
+          tenantId: payload.tenantId,
+          status: { in: ['PENDING', 'APPROVED', 'ADJUSTMENT'] },
+        },
+      }),
+      prisma.post.findMany({
+        where: { tenantId: payload.tenantId },
+        select: { clientName: true },
+        distinct: ['clientName'],
+      }),
+    ]);
+    if (activeCount >= 10) {
+      return res.status(403).json({ error: 'Limite de 10 projetos ativos atingido. Faca upgrade para o plano Pro.' });
+    }
+    const normalizedNewClient = String(clientName).trim().toLowerCase();
+    const knownClients = existingClients
+      .map(p => p.clientName?.toLowerCase().trim() ?? '')
+      .filter(c => c.length > 0);
+    if (!knownClients.includes(normalizedNewClient) && knownClients.length >= 3) {
+      return res.status(403).json({ error: 'Limite de 3 clientes atingido no plano Starter. Faca upgrade para o plano Pro.' });
+    }
+  }
+
   const normalizedSlaHours = Number.isFinite(Number(slaHours)) ? Math.max(1, Number(slaHours)) : 48;
   const dueAt = new Date(Date.now() + normalizedSlaHours * 60 * 60 * 1000);
   const versionHash = buildPostVersionHash({ title, channel, caption, imageUrl, clientName, tenantId: payload.tenantId });
@@ -2081,6 +2107,7 @@ async function dispatchSlaReminders() {
       publishedAt: null,
       dueAt: { not: null, lt: now },
       OR: [{ lastReminderAt: null }, { lastReminderAt: { lt: threshold } }],
+      tenant: { OR: [{ plan: 'PRO' }, { isPro: true }] },
     },
     select: { id: true, tenantId: true, version: true, currentVersionHash: true },
     take: 100,

@@ -150,7 +150,8 @@ const pricingPlans = [
     featured: false,
     cta: 'Assinar Starter',
     items: [
-      'Até 5 projetos ativos',
+      'Até 10 projetos ativos',
+      'Até 3 clientes',
       'Aprovação por link sem login',
       'Comentários e checklist',
       'Histórico de versões',
