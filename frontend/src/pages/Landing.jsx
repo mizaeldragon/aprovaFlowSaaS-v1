@@ -346,8 +346,8 @@ export default function Landing() {
             >
               Entrar
             </Link>
-            <Link
-              to="/register"
+            <a
+              href="#planos"
               className="rounded-xl px-4 py-2 text-sm font-black"
               style={{
                 backgroundImage: 'linear-gradient(135deg,#00E5FF 0%,#00E5FF 100%)',
@@ -355,7 +355,7 @@ export default function Landing() {
               }}
             >
               Começar agora
-            </Link>
+            </a>
           </div>
         </div>
       </header>
@@ -388,8 +388,8 @@ export default function Landing() {
             </p>
 
             <div className="mt-6 flex flex-col gap-2.5 sm:flex-row">
-              <Link
-                to="/register"
+              <a
+                href="#planos"
                 className="inline-flex items-center justify-center gap-2 rounded-2xl px-7 py-3.5 text-sm font-black"
                 style={{
                   backgroundImage: 'linear-gradient(135deg,#00E5FF 0%,#00E5FF 100%)',
@@ -398,7 +398,7 @@ export default function Landing() {
                 }}
               >
                 Solicitar demonstração
-              </Link>
+              </a>
               <a
                 href="#como-funciona"
                 className="inline-flex items-center justify-center rounded-2xl bg-[rgba(8,29,45,0.8)] px-7 py-3.5 text-sm font-bold text-slate-100 hover:text-[#00E5FF]"
@@ -667,8 +667,8 @@ export default function Landing() {
               Pare de perder tempo com retrabalho. Comece agora a profissionalizar seu fluxo de aprovação.
             </p>
 
-            <Link
-              to="/register"
+            <a
+              href="#planos"
               className="mt-10 inline-flex items-center justify-center gap-2 rounded-2xl px-10 py-4 text-lg font-black"
               style={{
                 backgroundImage: 'linear-gradient(135deg,#00E5FF 0%,#00E5FF 100%)',
@@ -677,7 +677,7 @@ export default function Landing() {
               }}
             >
               Agendar demonstração <ArrowRight size={18} />
-            </Link>
+            </a>
           </div>
         </section>
       </main>
