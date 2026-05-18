@@ -8,7 +8,8 @@
       "Bash(npm run *)",
       "Bash(git add *)",
       "Bash(git commit -m 'debug: add SMTP error logging to forgot-password endpoint *)",
-      "Bash(git push *)"
+      "Bash(git push *)",
+      "Bash(npm install *)"
     ]
   }
 }
