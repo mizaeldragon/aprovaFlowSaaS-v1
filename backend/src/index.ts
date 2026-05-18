@@ -929,6 +929,7 @@ app.post('/api/auth/forgot-password', async (req, res) => {
     if (error instanceof Error && error.message === 'EMAIL_NOT_CONFIGURED') {
       return res.status(500).json({ error: 'Servico de e-mail nao configurado no servidor.' });
     }
+    console.error('[forgot-password] SMTP error:', error);
     return res.status(500).json({ error: 'Erro ao solicitar recuperacao de senha.' });
   }
 });
