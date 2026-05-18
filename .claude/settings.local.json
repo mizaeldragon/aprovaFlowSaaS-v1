@@ -4,7 +4,11 @@
       "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\Mizael\\\\OneDrive\\\\Desktop\\\\Projeto VibeCoding\\\\aprovaflowSaaS\" -Recurse -Depth 2)",
       "Bash(Select-Object FullName)",
       "Bash(Remove-Item \"C:\\\\Users\\\\Mizael\\\\OneDrive\\\\Desktop\\\\Projeto VibeCoding\\\\aprovaflowSaaS\\\\backend\\\\Dockerfile\" -Force)",
-      "Bash(Remove-Item \"C:\\\\Users\\\\Mizael\\\\OneDrive\\\\Desktop\\\\Projeto VibeCoding\\\\aprovaflowSaaS\\\\backend\\\\.dockerignore\" -Force)"
+      "Bash(Remove-Item \"C:\\\\Users\\\\Mizael\\\\OneDrive\\\\Desktop\\\\Projeto VibeCoding\\\\aprovaflowSaaS\\\\backend\\\\.dockerignore\" -Force)",
+      "Bash(npm run *)",
+      "Bash(git add *)",
+      "Bash(git commit -m 'debug: add SMTP error logging to forgot-password endpoint *)",
+      "Bash(git push *)"
     ]
   }
 }
