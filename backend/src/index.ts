@@ -5,7 +5,7 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import OpenAI from 'openai';
 import crypto from 'crypto';
-import nodemailer from 'nodemailer';
+import { Resend } from 'resend';
 import Stripe from 'stripe';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
@@ -640,25 +640,16 @@ function validateResetPasswordPayload(payload: { token?: unknown; password?: unk
 }
 
 async function sendResetPasswordEmail(to: string, resetLink: string) {
-  const host = process.env.SMTP_HOST;
-  const port = Number(process.env.SMTP_PORT || 587);
-  const secure = String(process.env.SMTP_SECURE || 'false') === 'true';
-  const user = process.env.SMTP_USER;
-  const pass = process.env.SMTP_PASS;
-  const from = process.env.SMTP_FROM || user;
+  const apiKey = process.env.RESEND_API_KEY;
+  const from = process.env.SMTP_FROM || 'AprovaFluxo <contato@aprovafluxo.com.br>';
 
-  if (!host || !user || !pass || !from) {
+  if (!apiKey) {
     throw new Error('EMAIL_NOT_CONFIGURED');
   }
 
-  const transporter = nodemailer.createTransport({
-    host,
-    port,
-    secure,
-    auth: { user, pass },
-  });
+  const resend = new Resend(apiKey);
 
-  await transporter.sendMail({
+  await resend.emails.send({
     from,
     to,
     subject: 'AprovaFluxo | Redefinicao de senha',
